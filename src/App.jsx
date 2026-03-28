@@ -1,7 +1,8 @@
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "firebase/auth";
-import { getDatabase, ref, set, get, onValue, off, update, remove } from "firebase/database";
+import { getDatabase, ref, set, get, onValue, off, update, remove, push } from "firebase/database";
 
 const firebaseConfig = { apiKey:"AIzaSyDRCtfuYrEdnuKUsWu_79NC6G_xGLznBJc", authDomain:"tttrt-b8c5a.firebaseapp.com", databaseURL:"https://tttrt-b8c5a-default-rtdb.asia-southeast1.firebasedatabase.app", projectId:"tttrt-b8c5a", storageBucket:"tttrt-b8c5a.firebasestorage.app", messagingSenderId:"975123752593", appId:"1:975123752593:web:e591e930af3a3e29568130" };
 const app = initializeApp(firebaseConfig);
@@ -15,26 +16,42 @@ const SUPPORT_ID = "support_official";
 const APP_CHANNEL_ID = "channel_termeen_official";
 const BOT_FATHER_ID = "bot_botfather_official";
 const APP_CHANNEL_SUBS = 55000000;
+
 const ACOLORS = ["#E57373","#4CAF50","#9C27B0","#FF9800","#00BCD4","#F44336","#2196F3","#FF5722","#607D8B","#795548"];
 const rColor = s => ACOLORS[(s||"A").charCodeAt(0)%ACOLORS.length];
 const uidGen = () => Math.random().toString(36).slice(2,10)+Date.now().toString(36);
 const nowStr = () => new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"});
 const nowFull = () => { const d=new Date(); return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")} - ${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`; };
 const fmtSize = b => b<1024?b+" B":b<1048576?(b/1024).toFixed(1)+" KB":(b/1048576).toFixed(1)+" MB";
-const fmtSubs = n => n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(1)+"K":n;
+const fmtSubs = n => n>=1000000?(n/1000000).toFixed(1)+"M":n>=1000?(n/1000).toFixed(1)+"K":String(n);
 
 const T = { bg:"#17212b", sidebar:"#0e1621", panel:"#182533", accent:"#2b5278", accentBtn:"#5288c1", text:"#e8f4fd", textSec:"#6b8ca4", msgOut:"#2b5278", msgIn:"#182533", border:"#0d1822", inputBg:"#1c2d3d", hover:"#1c2d3d", online:"#4dd67a", unread:"#5288c1", danger:"#e05c5c", gold:"#f0a040", verified:"#5288c1", tabBar:"#1c2733" };
 
-// Smart search scoring
 function searchScore(item, q) {
-  const name = (item.displayName||item.name||"").toLowerCase();
-  const username = (item.username||"").toLowerCase();
-  if(username === q || name === q) return 100;
-  if(username.startsWith(q)) return 90 - username.length;
-  if(name.startsWith(q)) return 80 - name.length;
-  if(username.includes(q)) return 60;
+  const name=(item.displayName||item.name||"").toLowerCase();
+  const uname=(item.username||"").toLowerCase();
+  if(uname===q||name===q) return 100;
+  if(uname.startsWith(q)) return 90-uname.length;
+  if(name.startsWith(q)) return 80-name.length;
+  if(uname.includes(q)) return 60;
   if(name.includes(q)) return 50;
   return 0;
+}
+
+// Parse text for @mentions and make them blue+clickable
+function ParsedText({text, onMentionClick, style}) {
+  if(!text) return null;
+  const parts = text.split(/(@[a-zA-Z][a-zA-Z0-9_]{4,})/g);
+  return (
+    <span style={style}>
+      {parts.map((part,i) => {
+        if(/^@[a-zA-Z][a-zA-Z0-9_]{4,}$/.test(part)) {
+          return <span key={i} onClick={e=>{e.stopPropagation();onMentionClick&&onMentionClick(part.slice(1));}} style={{color:"#6ab3f3",cursor:"pointer",fontWeight:"600"}}>{part}</span>;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </span>
+  );
 }
 
 // Icons
@@ -66,20 +83,24 @@ const SVG = {
   notification:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   contacts:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={c} strokeWidth="2" strokeLinecap="round"/><circle cx="9" cy="7" r="4" stroke={c} strokeWidth="2"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke={c} strokeWidth="2" strokeLinecap="round"/></svg>,
   edit:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
-  trash:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke={c} strokeWidth="2" strokeLinecap="round"/><path d="M19 6l-1 14H6L5 6" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M10 11v6M14 11v6" stroke={c} strokeWidth="2" strokeLinecap="round"/><path d="M9 6V4h6v2" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  trash:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke={c} strokeWidth="2" strokeLinecap="round"/><path d="M19 6l-1 14H6L5 6" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M10 11v6M14 11v6" stroke={c} strokeWidth="2" strokeLinecap="round"/></svg>,
   crown:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M2 20h20M4 20L2 8l6 4 4-8 4 8 6-4-2 12H4z" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  pin:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M12 17v5M8 17h8M9 3h6l2 5-4 3v3H9V11L5 8l4-5z" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  link:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  flag:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><line x1="4" y1="22" x2="4" y2="15" stroke={c} strokeWidth="2" strokeLinecap="round"/></svg>,
+  forward:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><polyline points="15 17 20 12 15 7" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M4 18v-2a4 4 0 014-4h12" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
+  device:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><rect x="5" y="2" width="14" height="20" rx="2" stroke={c} strokeWidth="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke={c} strokeWidth="2" strokeLinecap="round"/></svg>,
   privacy:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   data:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="5" rx="9" ry="3" stroke={c} strokeWidth="2"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" stroke={c} strokeWidth="2"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" stroke={c} strokeWidth="2"/></svg>,
-  device:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><rect x="5" y="2" width="14" height="20" rx="2" stroke={c} strokeWidth="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke={c} strokeWidth="2" strokeLinecap="round"/></svg>,
   theme:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" stroke={c} strokeWidth="2"/><line x1="12" y1="1" x2="12" y2="3" stroke={c} strokeWidth="2" strokeLinecap="round"/><line x1="12" y1="21" x2="12" y2="23" stroke={c} strokeWidth="2" strokeLinecap="round"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke={c} strokeWidth="2" strokeLinecap="round"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke={c} strokeWidth="2" strokeLinecap="round"/><line x1="1" y1="12" x2="3" y2="12" stroke={c} strokeWidth="2" strokeLinecap="round"/><line x1="21" y1="12" x2="23" y2="12" stroke={c} strokeWidth="2" strokeLinecap="round"/></svg>,
   lang:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke={c} strokeWidth="2"/><line x1="2" y1="12" x2="22" y2="12" stroke={c} strokeWidth="2"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" stroke={c} strokeWidth="2"/></svg>,
   key:(c,s)=><svg width={s} height={s} viewBox="0 0 24 24" fill="none"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>,
 };
 const Ic = ({n,s=20,c=T.textSec}) => SVG[n]?SVG[n](c,s):null;
 
-// Avatar
-const Av = ({name,color,size=46,online=false,verified=false,photo=null,fraud=false}) => (
-  <div style={{position:"relative",flexShrink:0}}>
+// ── Avatar ──
+const Av = ({name,color,size=46,online=false,verified=false,photo=null,fraud=false,onClick}) => (
+  <div style={{position:"relative",flexShrink:0,cursor:onClick?"pointer":"default"}} onClick={onClick}>
     <div style={{width:size,height:size,borderRadius:"50%",background:photo?"transparent":(color||rColor(name||"?")),display:"flex",alignItems:"center",justifyContent:"center",fontSize:size*0.38,fontWeight:"800",color:"#fff",overflow:"hidden",border:fraud?`2px solid ${T.danger}`:"none"}}>
       {photo?<img src={photo} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(name||"?").charAt(0).toUpperCase()}
     </div>
@@ -88,6 +109,185 @@ const Av = ({name,color,size=46,online=false,verified=false,photo=null,fraud=fal
   </div>
 );
 
+// ── Profile Viewer (Telegram-style) ──
+function ProfileViewer({profile,onClose,onChat,currentUser,chats}) {
+  if(!profile) return null;
+  const isUser=profile.uid!=null;
+  const mutualGroups=isUser?chats.filter(c=>c.type==="group"&&Array.isArray(c.members)&&c.members.includes(profile.uid)&&c.members.includes(currentUser?.uid)):[];
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+      <div style={{background:T.sidebar,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:"480px",maxHeight:"85vh",overflow:"hidden",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
+        {/* Hero */}
+        <div style={{background:`linear-gradient(180deg,${profile.color||rColor(profile.name||profile.displayName||"?")} 0%,${T.sidebar} 100%)`,padding:"0 0 0 0",position:"relative"}}>
+          <button onClick={onClose} style={{position:"absolute",top:"12px",right:"12px",background:"rgba(0,0,0,0.3)",border:"none",borderRadius:"50%",width:"32px",height:"32px",color:"#fff",cursor:"pointer",fontSize:"16px",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10}}>✕</button>
+          {/* Full width photo */}
+          <div style={{width:"100%",height:"220px",background:profile.photoURL?"transparent":(profile.color||rColor(profile.name||profile.displayName||"?")),display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",position:"relative"}}>
+            {profile.photoURL
+              ? <img src={profile.photoURL} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              : <span style={{fontSize:"80px",fontWeight:"900",color:"rgba(255,255,255,0.8)"}}>{(profile.name||profile.displayName||"?").charAt(0).toUpperCase()}</span>
+            }
+            {/* Name overlay at bottom of photo */}
+            <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(transparent,rgba(0,0,0,0.7))",padding:"20px 16px 12px"}}>
+              <div style={{color:"#fff",fontSize:"20px",fontWeight:"800",display:"flex",alignItems:"center",gap:"7px"}}>
+                {profile.name||profile.displayName}
+                {(profile.verified||profile.isOfficial)&&<Ic n="check" s={18} c="#fff"/>}
+                {profile.isFraud&&<span style={{background:T.danger,color:"#fff",fontSize:"10px",padding:"2px 6px",borderRadius:"5px",fontWeight:"700"}}>احتيال</span>}
+              </div>
+              {profile.username&&<div style={{color:"rgba(255,255,255,0.7)",fontSize:"13px"}}>@{profile.username}</div>}
+            </div>
+          </div>
+        </div>
+        {/* Info */}
+        <div style={{overflowY:"auto",flex:1,padding:"12px 16px"}}>
+          {profile.bio&&(
+            <div style={{background:T.panel,borderRadius:"12px",padding:"12px",marginBottom:"10px"}}>
+              <div style={{color:T.textSec,fontSize:"11px",marginBottom:"4px"}}>النبذة</div>
+              <div style={{color:T.text,fontSize:"14px",lineHeight:"1.5"}}>{profile.bio}</div>
+            </div>
+          )}
+          {isUser&&(
+            <div style={{background:T.panel,borderRadius:"12px",padding:"12px",marginBottom:"10px"}}>
+              <div style={{color:T.textSec,fontSize:"11px",marginBottom:"4px"}}>معلومات</div>
+              {[
+                {l:"اسم المستخدم",v:"@"+(profile.username||"—")},
+                {l:"آخر ظهور",v:profile.lastSeen?new Date(profile.lastSeen).toLocaleDateString("ar-SA"):"—"},
+              ].map(r=>(
+                <div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:`1px solid ${T.border}20`}}>
+                  <span style={{color:T.textSec,fontSize:"12px"}}>{r.l}</span>
+                  <span style={{color:T.text,fontSize:"12px",fontWeight:"600"}}>{r.v}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {isUser&&mutualGroups.length>0&&(
+            <div style={{background:T.panel,borderRadius:"12px",padding:"12px",marginBottom:"10px"}}>
+              <div style={{color:T.textSec,fontSize:"11px",marginBottom:"8px"}}>مجموعات مشتركة ({mutualGroups.length})</div>
+              {mutualGroups.slice(0,3).map(g=>(
+                <div key={g.id} style={{display:"flex",alignItems:"center",gap:"8px",padding:"5px 0"}}>
+                  <Av name={g.name} size={32} color={rColor(g.name)}/>
+                  <div style={{color:T.text,fontSize:"13px"}}>{g.name}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {!isUser&&profile.type==="channel"&&(
+            <div style={{background:T.panel,borderRadius:"12px",padding:"12px",marginBottom:"10px"}}>
+              <div style={{color:T.textSec,fontSize:"11px",marginBottom:"4px"}}>إحصائيات</div>
+              <div style={{color:T.text,fontSize:"14px"}}>{fmtSubs(profile.subscribers||0)} مشترك</div>
+            </div>
+          )}
+          {isUser&&onChat&&profile.uid!==currentUser?.uid&&(
+            <button onClick={()=>{onChat(profile);onClose();}} style={{width:"100%",padding:"13px",background:T.accentBtn,border:"none",borderRadius:"12px",color:"#fff",fontWeight:"700",fontSize:"15px",cursor:"pointer",fontFamily:"inherit",marginTop:"8px"}}>
+              💬 إرسال رسالة
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Report Modal ──
+function ReportModal({onClose,onReport}) {
+  const [selected,setSelected]=useState("");
+  const [note,setNote]=useState("");
+  const reasons=["محتوى جنسي أو للبالغين","نشاطات إرهابية أو عنف","احتيال أو نصب","رسائل مزعجة (سبام)","مواد مسيئة أو تحرش","انتهاك حقوق الملكية","محتوى مضلل أو كاذب","شيء آخر"];
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",zIndex:700,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+      <div style={{background:"#1a2a3a",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:"480px",padding:"20px",maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}}>
+          <span style={{color:T.text,fontSize:"17px",fontWeight:"800"}}>🚩 إرسال بلاغ</span>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer"}}><Ic n="close" s={18}/></button>
+        </div>
+        <div style={{color:T.textSec,fontSize:"12px",marginBottom:"12px"}}>اختر سبب البلاغ:</div>
+        <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"14px"}}>
+          {reasons.map(r=>(
+            <button key={r} onClick={()=>setSelected(r)} style={{display:"flex",alignItems:"center",gap:"10px",padding:"11px 14px",borderRadius:"11px",border:`1px solid ${selected===r?T.accentBtn:T.border}30`,background:selected===r?`${T.accentBtn}15`:"transparent",color:T.text,cursor:"pointer",fontFamily:"inherit",fontSize:"13.5px",textAlign:"right",transition:"all 0.2s"}}>
+              <div style={{width:"18px",height:"18px",borderRadius:"50%",border:`2px solid ${selected===r?T.accentBtn:T.textSec}`,background:selected===r?T.accentBtn:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {selected===r&&<div style={{width:"8px",height:"8px",borderRadius:"50%",background:"#fff"}}/>}
+              </div>
+              {r}
+            </button>
+          ))}
+        </div>
+        <textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="تفاصيل إضافية (اختياري)..." rows={3}
+          style={{width:"100%",background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"11px 14px",color:T.text,fontSize:"14px",outline:"none",direction:"rtl",fontFamily:"inherit",resize:"none",marginBottom:"12px",boxSizing:"border-box"}}/>
+        <button onClick={()=>{if(selected)onReport(selected,note);}} disabled={!selected} style={{width:"100%",padding:"13px",background:selected?T.danger:`${T.danger}40`,border:"none",borderRadius:"12px",color:"#fff",fontWeight:"700",fontSize:"15px",cursor:selected?"pointer":"not-allowed",fontFamily:"inherit"}}>
+          🚩 إرسال البلاغ
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Sessions Panel ──
+function SessionsPanel({user,userData,db}) {
+  const [sessions,setSessions]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    if(!user) return;
+    const load=async()=>{
+      const snap=await get(ref(db,`sessions/${user.uid}`));
+      if(snap.exists()) setSessions(Object.values(snap.val()));
+      else {
+        // Create current session
+        const sid=uidGen();
+        const s={id:sid,device:"متصفح الويب",browser:navigator.userAgent.includes("Chrome")?"Chrome":navigator.userAgent.includes("Firefox")?"Firefox":"Safari",ip:"xxx.xxx.xxx",location:"—",loginTime:Date.now(),current:true};
+        await set(ref(db,`sessions/${user.uid}/${sid}`),s);
+        setSessions([s]);
+      }
+      setLoading(false);
+    };
+    load();
+  },[user,db]);
+
+  const removeSession=async(sid)=>{
+    if(!window.confirm("إزالة هذه الجلسة؟")) return;
+    await remove(ref(db,`sessions/${user.uid}/${sid}`));
+    setSessions(p=>p.filter(s=>s.id!==sid));
+    // Notify
+    const botId=`bot_${user.uid}`;const nid=uidGen();
+    await set(ref(db,`messages/${botId}/${nid}`),{id:nid,chatId:botId,text:`🔐 تم إنهاء جلسة من جهاز: ${sessions.find(s=>s.id===sid)?.device||"جهاز"}\n🕐 ${nowFull()}`,from:APP_BOT_ID,senderName:"DFGFD",time:nowStr(),type:"text",isOfficialBot:true,createdAt:Date.now()});
+  };
+
+  if(loading) return <div style={{padding:"40px",textAlign:"center",color:T.textSec}}>⟳ جاري التحميل...</div>;
+
+  return (
+    <div style={{padding:"16px",display:"flex",flexDirection:"column",gap:"10px"}}>
+      <div style={{color:T.textSec,fontSize:"12px",marginBottom:"4px"}}>الجلسات النشطة ({sessions.length})</div>
+      {sessions.map(s=>(
+        <div key={s.id} style={{background:T.panel,borderRadius:"14px",padding:"14px",border:`1px solid ${s.current?T.accentBtn:T.border}30`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div>
+              <div style={{color:T.text,fontWeight:"700",fontSize:"14px",display:"flex",alignItems:"center",gap:"6px"}}>
+                <Ic n="device" s={16} c={s.current?T.accentBtn:T.textSec}/>
+                {s.device}
+                {s.current&&<span style={{background:`${T.success}20`,color:T.success,fontSize:"10px",padding:"1px 6px",borderRadius:"5px",fontWeight:"700"}}>حالي</span>}
+              </div>
+              <div style={{color:T.textSec,fontSize:"12px",marginTop:"4px"}}>{s.browser} · {new Date(s.loginTime).toLocaleDateString("ar-SA")}</div>
+              <div style={{color:T.textSec,fontSize:"11px"}}>{s.location||"الموقع غير معروف"}</div>
+            </div>
+            {!s.current&&(
+              <button onClick={()=>removeSession(s.id)} style={{background:`${T.danger}15`,border:`1px solid ${T.danger}30`,borderRadius:"8px",padding:"6px 12px",color:T.danger,cursor:"pointer",fontFamily:"inherit",fontSize:"12px",fontWeight:"600"}}>إزالة</button>
+            )}
+          </div>
+        </div>
+      ))}
+      <button onClick={async()=>{
+        if(!window.confirm("إنهاء جميع الجلسات الأخرى؟")) return;
+        const others=sessions.filter(s=>!s.current);
+        for(const s of others) await remove(ref(db,`sessions/${user.uid}/${s.id}`));
+        setSessions(p=>p.filter(s=>s.current));
+        alert("✅ تم إنهاء جميع الجلسات الأخرى");
+      }} style={{background:`${T.danger}12`,border:`1px solid ${T.danger}25`,borderRadius:"12px",padding:"12px",color:T.danger,cursor:"pointer",fontFamily:"inherit",fontSize:"13px",fontWeight:"600",width:"100%"}}>
+        إنهاء جميع الجلسات الأخرى
+      </button>
+    </div>
+  );
+}
+
+// ── Modal ──
 const Modal = ({title,children,onClose,width="440px"}) => (
   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:"16px"}} onClick={onClose}>
     <div style={{background:"#1a2a3a",borderRadius:"18px",padding:"24px",width,maxWidth:"96vw",maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 64px rgba(0,0,0,0.7)",border:`1px solid ${T.border}`}} onClick={e=>e.stopPropagation()}>
@@ -141,7 +341,7 @@ function AuthScreen() {
       if(!form.username.trim()){setErr("أدخل اسم المستخدم");return false;}
       if(form.username.trim().length<5){setErr("اسم المستخدم 5 أحرف على الأقل");return false;}
       if(/^\d/.test(form.username)){setErr("اسم المستخدم لا يبدأ برقم");return false;}
-      if(!/^[a-zA-Z][a-zA-Z0-9_]{4,}$/.test(form.username)){setErr("حروف وأرقام وشرطة سفلية فقط، يبدأ بحرف");return false;}
+      if(!/^[a-zA-Z][a-zA-Z0-9_]{4,}$/.test(form.username)){setErr("حروف وأرقام وشرطة سفلية، يبدأ بحرف");return false;}
       if(form.password.length<6){setErr("كلمة المرور 6 أحرف على الأقل");return false;}
     }
     if(!form.email.trim()){setErr("أدخل البريد الإلكتروني");return false;}
@@ -153,40 +353,33 @@ function AuthScreen() {
     if(!validate()) return;
     setLoading(true);setErr("");
     try {
-      const usSnap=await get(ref(db,`usernames/${form.username.toLowerCase()}`));
-      if(usSnap.exists()){setErr("اسم المستخدم مستخدم بالفعل");setLoading(false);return;}
+      const [usSnap]=await Promise.all([get(ref(db,`usernames/${form.username.toLowerCase()}`))]);
+      if(usSnap.exists()){setErr("اسم المستخدم مأخوذ مسبقاً");setLoading(false);return;}
       const cred=await createUserWithEmailAndPassword(auth,form.email,form.password);
       await updateProfile(cred.user,{displayName:form.displayName});
       const uid2=cred.user.uid;
       const userData={uid:uid2,displayName:form.displayName,username:form.username.toLowerCase(),email:form.email,bio:"",photoURL:"",verified:false,isBanned:false,isRestricted:false,isFraud:false,twoFactor:false,createdAt:Date.now(),lastSeen:Date.now(),color:rColor(form.displayName)};
       await set(ref(db,`users/${uid2}`),userData);
       await set(ref(db,`usernames/${form.username.toLowerCase()}`),uid2);
-      // Saved messages
+      // Create session
+      const sid=uidGen();
+      await set(ref(db,`sessions/${uid2}/${sid}`),{id:sid,device:"متصفح الويب",browser:"Chrome",ip:"xxx.xxx.xxx",location:"—",loginTime:Date.now(),current:true});
+      // Saved
       const savedId=`saved_${uid2}`;
       await set(ref(db,`chats/${savedId}`),{id:savedId,type:"saved",name:"الرسائل المحفوظة",members:[uid2],createdAt:Date.now()});
       await set(ref(db,`userChats/${uid2}/${savedId}`),{chatId:savedId,lastMessage:"احفظ رسائلك هنا",lastTime:nowStr(),unread:0,order:Date.now()-3,type:"saved",name:"الرسائل المحفوظة",color:"#5288c1"});
-      // DFGFD Bot chat
+      // DFGFD Bot
       const botChatId=`bot_${uid2}`;
       await set(ref(db,`chats/${botChatId}`),{id:botChatId,type:"official_bot",name:"DFGFD",username:APP_BOT_USERNAME,isOfficial:true,verified:true,members:[uid2,APP_BOT_ID],createdAt:Date.now(),photoURL:""});
       await set(ref(db,`userChats/${uid2}/${botChatId}`),{chatId:botChatId,lastMessage:"مرحباً بك في تيرمين ✈️",lastTime:nowStr(),unread:1,order:Date.now()-2,type:"official_bot",name:"DFGFD",verified:true,color:"#5288c1"});
       const wid=uidGen();
-      await set(ref(db,`messages/${botChatId}/${wid}`),{id:wid,chatId:botChatId,text:`✈️ مرحباً ${form.displayName}!\n\nأنا DFGFD، المساعد الرسمي لتطبيق تيرمين.\n\nيمكنك استخدام التطبيق بكل أمان وجميع بياناتك مشفّرة.\n\n🆔 معرّفك: @${form.username.toLowerCase()}\n\nإذا احتجت أي مساعدة أو حدثت تغييرات في حسابك ستصلك الإشعارات هنا! 🔔`,from:APP_BOT_ID,senderName:"DFGFD",time:nowStr(),type:"text",isOfficialBot:true,createdAt:Date.now()});
-      // Support chat
-      const supChatId=`support_${uid2}`;
-      await set(ref(db,`chats/${supChatId}`),{id:supChatId,type:"support",name:"الدعم الفني",username:"support",isOfficial:true,verified:false,members:[uid2,SUPPORT_ID],createdAt:Date.now(),photoURL:""});
-      await set(ref(db,`userChats/${uid2}/${supChatId}`),{chatId:supChatId,lastMessage:"الدعم",lastTime:"",unread:0,order:Date.now()-1,type:"support",name:"الدعم الفني",color:"#4CAF50",subtitle:"الدعم"});
-      // App channel subscription
-      const chSnap=await get(ref(db,`chats/${APP_CHANNEL_ID}`));
-      if(chSnap.exists()){
-        const ch=chSnap.val();
-        const subs=(ch.subscribers||APP_CHANNEL_SUBS)+1;
-        const subsList=[...(ch.subscribersList||[])];
-        if(!subsList.includes(uid2)) subsList.push(uid2);
-        await update(ref(db,`chats/${APP_CHANNEL_ID}`),{subscribers:subs,subscribersList:subsList,members:[...(ch.members||[]),uid2]});
-        await set(ref(db,`userChats/${uid2}/${APP_CHANNEL_ID}`),{chatId:APP_CHANNEL_ID,lastMessage:"مرحباً بقناة تيرمين الرسمية",lastTime:nowStr(),unread:1,order:Date.now(),type:"channel",name:"تيرمين الرسمية",verified:true,color:"#5288c1",photoURL:""});
-      }
+      await set(ref(db,`messages/${botChatId}/${wid}`),{id:wid,chatId:botChatId,text:`✈️ مرحباً ${form.displayName}!\n\nأنا DFGFD، المساعد الرسمي لتطبيق تيرمين.\n\n🆔 معرّفك: @${form.username.toLowerCase()}\n\nجميع بياناتك مشفّرة وآمنة. إذا حدثت أي تغييرات في حسابك ستصلك الإشعارات هنا! 🔔`,from:APP_BOT_ID,senderName:"DFGFD",time:nowStr(),type:"text",isOfficialBot:true,createdAt:Date.now()});
+      // Support
+      const supId=`support_${uid2}`;
+      await set(ref(db,`chats/${supId}`),{id:supId,type:"support",name:"الدعم الفني",isOfficial:true,members:[uid2,SUPPORT_ID],createdAt:Date.now()});
+      await set(ref(db,`userChats/${uid2}/${supId}`),{chatId:supId,lastMessage:"الدعم",lastTime:"",unread:0,order:Date.now()-1,type:"support",name:"الدعم الفني",color:"#4CAF50",subtitle:"الدعم"});
     } catch(e){
-      const m={"auth/email-already-in-use":"البريد مستخدم بالفعل","auth/invalid-email":"بريد غير صالح","auth/weak-password":"كلمة المرور ضعيفة","auth/network-request-failed":"خطأ في الاتصال"};
+      const m={"auth/email-already-in-use":"البريد مستخدم بالفعل","auth/invalid-email":"بريد غير صالح","auth/weak-password":"كلمة المرور ضعيفة"};
       setErr(m[e.code]||e.message);
     }
     setLoading(false);
@@ -198,8 +391,15 @@ function AuthScreen() {
     try {
       const cred=await signInWithEmailAndPassword(auth,form.email,form.password);
       await update(ref(db,`users/${cred.user.uid}`),{lastSeen:Date.now()});
+      // Update/create session
+      const uid2=cred.user.uid;
+      const sid=uidGen();
+      await set(ref(db,`sessions/${uid2}/${sid}`),{id:sid,device:"متصفح الويب",browser:"Chrome",ip:"xxx.xxx.xxx",location:"—",loginTime:Date.now(),current:true});
+      // Notify DFGFD
+      const botId=`bot_${uid2}`;const nid=uidGen();
+      await set(ref(db,`messages/${botId}/${nid}`),{id:nid,chatId:botId,text:`🔔 تسجيل دخول جديد\n📱 الجهاز: متصفح الويب\n🕐 ${nowFull()}\n\nإذا لم تكن أنت، قم بتغيير كلمة المرور فوراً!`,from:APP_BOT_ID,senderName:"DFGFD",time:nowStr(),type:"text",isOfficialBot:true,createdAt:Date.now()});
     } catch(e){
-      const m={"auth/invalid-credential":"بيانات الدخول غير صحيحة","auth/user-not-found":"لا يوجد حساب","auth/wrong-password":"كلمة المرور خاطئة","auth/network-request-failed":"خطأ في الاتصال"};
+      const m={"auth/invalid-credential":"بيانات الدخول غير صحيحة","auth/user-not-found":"لا يوجد حساب","auth/wrong-password":"كلمة المرور خاطئة"};
       setErr(m[e.code]||e.message);
     }
     setLoading(false);
@@ -227,13 +427,14 @@ function AuthScreen() {
           <PBtn onClick={mode==="login"?handleLogin:handleRegister} loading={loading}>{mode==="login"?"🔐 تسجيل الدخول":"✨ إنشاء حساب"}</PBtn>
         </div>
       </div>
-      <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}} *{box-sizing:border-box;margin:0;padding:0} input::placeholder{color:${T.textSec}}`}</style>
+      <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}} *{box-sizing:border-box;margin:0;padding:0}`}</style>
     </div>
   );
 }
 
 // Settings Panel
-function SettingsPanel({user,userData,setUserData,isOwner,openSupportChat,setModal}) {
+function SettingsPanel({user,userData,setUserData,isOwner,openSupportChat,setModal,db}) {
+  const [subTab,setSubTab]=useState(null);
   const [notifs,setNotifs]=useState({privateMsg:true,groups:true,channels:false,sounds:true});
   const [privacy,setPrivacy]=useState({phone:"nobody",photo:"everyone",lastSeen:"everyone"});
   const photoRef=useRef(null);
@@ -247,23 +448,28 @@ function SettingsPanel({user,userData,setUserData,isOwner,openSupportChat,setMod
       if(s.exists())setUserData(s.val());
     };
     r.readAsDataURL(file);
-  },[user,setUserData]);
+  },[user,setUserData,db]);
+
+  if(subTab==="sessions") return (
+    <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
+      <div style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:"10px",borderBottom:`1px solid ${T.border}`}}>
+        <button onClick={()=>setSubTab(null)} style={{background:"none",border:"none",cursor:"pointer"}}><Ic n="back" s={20}/></button>
+        <span style={{color:T.text,fontWeight:"700",fontSize:"15px"}}>الجلسات النشطة</span>
+      </div>
+      <div style={{flex:1,overflowY:"auto"}}><SessionsPanel user={user} userData={userData} db={db}/></div>
+    </div>
+  );
 
   const SECTIONS=[
     {title:"الحساب",items:[
       {ic:"user",l:"تعديل الملف الشخصي",a:()=>setModal("editProfile")},
-      {ic:"device",l:"الأجهزة النشطة",sub:"جهاز واحد نشط"},
+      {ic:"device",l:"الجلسات النشطة",sub:"عرض وإدارة جلساتك",a:()=>setSubTab("sessions")},
       {ic:"lock",l:"التحقق بخطوتين",sub:userData?.twoFactor?"مفعّل ✅":"معطّل",a:()=>setModal("twoFactor")},
       {ic:"key",l:"تغيير كلمة المرور",a:()=>setModal("changePass")},
     ]},
-    {title:"الإشعارات والأصوات",custom:()=>(
-      <div style={{background:T.sidebar,padding:"4px 0"}}>
-        {[
-          {k:"privateMsg",l:"الرسائل الخاصة"},
-          {k:"groups",l:"المجموعات"},
-          {k:"channels",l:"القنوات"},
-          {k:"sounds",l:"الأصوات"},
-        ].map(item=>(
+    {title:"الإشعارات",custom:()=>(
+      <div style={{background:T.sidebar}}>
+        {[{k:"privateMsg",l:"الرسائل الخاصة"},{k:"groups",l:"المجموعات"},{k:"channels",l:"القنوات"},{k:"sounds",l:"الأصوات"}].map(item=>(
           <div key={item.k} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",borderBottom:`1px solid ${T.border}15`}}>
             <div style={{display:"flex",alignItems:"center",gap:"14px"}}>
               <div style={{width:"38px",height:"38px",borderRadius:"12px",background:`${T.accentBtn}20`,display:"flex",alignItems:"center",justifyContent:"center"}}><Ic n="notification" s={18} c={T.accentBtn}/></div>
@@ -287,10 +493,8 @@ function SettingsPanel({user,userData,setUserData,isOwner,openSupportChat,setMod
       {ic:"theme",l:"الوضع الداكن",sub:"مفعّل"},
       {ic:"theme",l:"حجم الخط",sub:"متوسط"},
     ]},
-    {title:"اللغة",items:[
-      {ic:"lang",l:"لغة التطبيق",sub:"العربية"},
-    ]},
-    {title:"الدعم والمساعدة",items:[
+    {title:"اللغة",items:[{ic:"lang",l:"لغة التطبيق",sub:"العربية"}]},
+    {title:"الدعم",items:[
       {ic:"support",l:"الدعم الفني",a:openSupportChat},
       {ic:"privacy",l:"سياسة الخصوصية"},
     ]},
@@ -317,13 +521,11 @@ function SettingsPanel({user,userData,setUserData,isOwner,openSupportChat,setMod
       </div>
       {SECTIONS.map(group=>(
         <div key={group.title} style={{marginBottom:"6px"}}>
-          <div style={{color:T.textSec,fontSize:"12px",fontWeight:"700",padding:"12px 16px 5px",letterSpacing:"0.5px"}}>{group.title}</div>
+          <div style={{color:T.textSec,fontSize:"12px",fontWeight:"700",padding:"12px 16px 5px"}}>{group.title}</div>
           {group.custom?group.custom():group.items.map(item=>(
             <div key={item.l} onClick={item.a} style={{display:"flex",alignItems:"center",gap:"14px",padding:"12px 16px",background:T.sidebar,cursor:item.a?"pointer":"default",borderBottom:`1px solid ${T.border}15`}}
               onMouseEnter={e=>{if(item.a)e.currentTarget.style.background=T.hover;}} onMouseLeave={e=>e.currentTarget.style.background=T.sidebar}>
-              <div style={{width:"38px",height:"38px",borderRadius:"12px",background:`${T.accentBtn}20`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <Ic n={item.ic} s={18} c={T.accentBtn}/>
-              </div>
+              <div style={{width:"38px",height:"38px",borderRadius:"12px",background:`${T.accentBtn}20`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ic n={item.ic} s={18} c={T.accentBtn}/></div>
               <div style={{flex:1}}>
                 <div style={{color:T.text,fontSize:"14.5px"}}>{item.l}</div>
                 {item.sub&&<div style={{color:T.textSec,fontSize:"12px"}}>{item.sub}</div>}
@@ -335,13 +537,13 @@ function SettingsPanel({user,userData,setUserData,isOwner,openSupportChat,setMod
       ))}
       <div style={{padding:"16px",textAlign:"center"}}>
         <button onClick={()=>signOut(auth)} style={{background:`${T.danger}15`,border:`1px solid ${T.danger}30`,borderRadius:"12px",padding:"13px",color:T.danger,cursor:"pointer",fontFamily:"inherit",fontWeight:"700",fontSize:"14px",width:"100%"}}>🚪 تسجيل الخروج</button>
-        <div style={{color:T.textSec,fontSize:"11px",marginTop:"12px"}}>✈️ تيرمين v4.1</div>
+        <div style={{color:T.textSec,fontSize:"11px",marginTop:"12px"}}>✈️ تيرمين v4.2</div>
       </div>
     </div>
   );
 }
 
-// Main App
+// ── MAIN APP ──
 export default function App() {
   const [user,setUser]=useState(null);
   const [userData,setUserData]=useState(null);
@@ -362,6 +564,7 @@ export default function App() {
   const [showInfo,setShowInfo]=useState(false);
   const [attachMenu,setAttachMenu]=useState(false);
   const [replyTo,setReplyTo]=useState(null);
+  const [editingMsg,setEditingMsg]=useState(null);
   const [ctxMenu,setCtxMenu]=useState(null);
   const [modal,setModal]=useState(null);
   const [bottomTab,setBottomTab]=useState("chats");
@@ -370,24 +573,23 @@ export default function App() {
   const [editProfile,setEditProfile]=useState({displayName:"",username:"",bio:"",photo:""});
   const [isOwner,setIsOwner]=useState(false);
   const [channelSettings,setChannelSettings]=useState(null);
-  const [botForm,setBotForm]=useState({name:"",username:""});
   const [msgUnsub,setMsgUnsub]=useState(null);
+  const [pinnedMsg,setPinnedMsg]=useState(null);
+  const [profileViewer,setProfileViewer]=useState(null);
+  const [reportTarget,setReportTarget]=useState(null);
+  const [reactions,setReactions]=useState({});
 
   const endRef=useRef(null);
   const inputRef=useRef(null);
   const fileRef=useRef(null);
   const imgRef=useRef(null);
 
-  // Init app channel & botfather if not exists
+  // Init app data
   const initAppData=useCallback(async()=>{
     const chSnap=await get(ref(db,`chats/${APP_CHANNEL_ID}`));
     if(!chSnap.exists()){
       await set(ref(db,`chats/${APP_CHANNEL_ID}`),{id:APP_CHANNEL_ID,type:"channel",name:"تيرمين الرسمية",username:"termeen",bio:"القناة الرسمية لتطبيق تيرمين ✈️",verified:true,isOfficial:true,ownerId:"system",subscribers:APP_CHANNEL_SUBS,subscribersList:[],members:["system"],createdAt:Date.now(),photoURL:""});
       await set(ref(db,`chatUsernames/termeen`),APP_CHANNEL_ID);
-    }
-    const bfSnap=await get(ref(db,`chats/${BOT_FATHER_ID}`));
-    if(!bfSnap.exists()){
-      await set(ref(db,`chats/${BOT_FATHER_ID}`),{id:BOT_FATHER_ID,type:"official_bot",name:"BotFather",username:"botfather",bio:"أنشئ بوتك الخاص وأديره",verified:true,isOfficial:true,members:["system"],createdAt:Date.now(),photoURL:""});
     }
   },[]);
 
@@ -412,7 +614,7 @@ export default function App() {
     return()=>{unsub();window.removeEventListener("resize",onResize);};
   },[initAppData]);
 
-  // Load chats (deduped)
+  // Load chats
   useEffect(()=>{
     if(!user) return;
     const r=ref(db,`userChats/${user.uid}`);
@@ -433,22 +635,29 @@ export default function App() {
     return()=>off(r);
   },[user]);
 
-  // Load messages
+  // Load messages + reactions
   useEffect(()=>{
-    if(msgUnsub){msgUnsub();setMsgUnsub(null);}
+    if(msgUnsub){msgUnsub();}
     if(!activeChat) return;
     const r=ref(db,`messages/${activeChat}`);
     const unsub=onValue(r,snap=>{
       if(!snap.exists()){setMessages([]);return;}
-      setMessages(Object.values(snap.val()).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0)));
+      const msgs=Object.values(snap.val()).sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+      setMessages(msgs);
+      // Find pinned
+      const pinned=msgs.find(m=>m.pinned);
+      setPinnedMsg(pinned||null);
     });
     setMsgUnsub(()=>()=>off(r));
-    return()=>off(r);
+    // Load reactions
+    const rr=ref(db,`reactions/${activeChat}`);
+    onValue(rr,snap=>{if(snap.exists())setReactions(snap.val());else setReactions({});});
+    return()=>{off(r);off(rr);};
   },[activeChat]);
 
   useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[messages]);
 
-  // Preload all users & chats for instant search
+  // Preload cache for instant search
   useEffect(()=>{
     if(!user) return;
     const loadCache=async()=>{
@@ -461,7 +670,7 @@ export default function App() {
     return()=>clearInterval(interval);
   },[user]);
 
-  // Instant search from cache
+  // Instant search
   useEffect(()=>{
     if(!search.trim()||!searchMode){setSearchResults([]);return;}
     const q=search.toLowerCase().replace("@","").trim();
@@ -482,8 +691,8 @@ export default function App() {
 
   const openChat=useCallback(async(chatId,chatDataOverride=null)=>{
     setActiveChat(chatId);
-    setShowInfo(false);setReplyTo(null);setShowMenu(false);setAttachMenu(false);
-    setSearchMode(false);setSearch("");setModal(null);
+    setShowInfo(false);setReplyTo(null);setEditingMsg(null);setShowMenu(false);setAttachMenu(false);
+    setSearchMode(false);setSearch("");setModal(null);setCtxMenu(null);
     if(isMobile) setShowSidebar(false);
     const snap=await get(ref(db,`chats/${chatId}`));
     setActiveChatData(snap.exists()?snap.val():chatDataOverride);
@@ -494,22 +703,26 @@ export default function App() {
 
   const openSupportChat=useCallback(async()=>{
     if(!user) return;
-    const supChatId=`support_${user.uid}`;
-    const snap=await get(ref(db,`chats/${supChatId}`));
+    const supId=`support_${user.uid}`;
+    const snap=await get(ref(db,`chats/${supId}`));
     if(!snap.exists()){
-      const cd={id:supChatId,type:"support",name:"الدعم الفني",username:"support",isOfficial:true,verified:false,members:[user.uid,SUPPORT_ID],createdAt:Date.now(),photoURL:""};
-      await set(ref(db,`chats/${supChatId}`),cd);
-      await set(ref(db,`userChats/${user.uid}/${supChatId}`),{chatId:supChatId,lastMessage:"الدعم",lastTime:"",unread:0,order:Date.now(),type:"support",name:"الدعم الفني",color:"#4CAF50",subtitle:"الدعم"});
+      const cd={id:supId,type:"support",name:"الدعم الفني",isOfficial:true,members:[user.uid,SUPPORT_ID],createdAt:Date.now()};
+      await set(ref(db,`chats/${supId}`),cd);
+      await set(ref(db,`userChats/${user.uid}/${supId}`),{chatId:supId,lastMessage:"الدعم",lastTime:"",unread:0,order:Date.now(),type:"support",name:"الدعم الفني",color:"#4CAF50",subtitle:"الدعم"});
     }
-    openChat(supChatId,{id:supChatId,type:"support",name:"الدعم الفني",subtitle:"الدعم"});
-    setBottomTab("chats");
+    openChat(supId,{id:supId,type:"support",name:"الدعم الفني"});
   },[user,openChat]);
 
   const sendMessage=useCallback(async(overText=null,type="text",extra={})=>{
-    const text=overText??input.trim();
+    const text=editingMsg?input.trim():(overText??input.trim());
     if(!text&&!extra.imageUrl&&!extra.fileName) return;
     if(!activeChat||!user||!userData) return;
     if(activeChatData?.type==="channel"&&activeChatData?.ownerId!==user.uid) return;
+    // Edit mode
+    if(editingMsg){
+      await update(ref(db,`messages/${activeChat}/${editingMsg.id}`),{text,edited:true});
+      setEditingMsg(null);setInput("");inputRef.current?.focus();return;
+    }
     const msgId=uidGen();
     const msg={id:msgId,chatId:activeChat,text:text||"",from:user.uid,senderName:userData.displayName,senderUsername:userData.username,senderPhoto:userData.photoURL||"",senderColor:userData.color||rColor(userData.displayName),time:nowStr(),type,createdAt:Date.now(),replyTo:replyTo?{text:replyTo.text,sender:replyTo.senderName||"أنا",msgId:replyTo.id}:null,...extra};
     await set(ref(db,`messages/${activeChat}/${msgId}`),msg);
@@ -524,7 +737,7 @@ export default function App() {
         }
       }
     }
-    // Auto AI reply for support chat
+    // AI reply for support
     if(activeChatData?.type==="support"){
       setTimeout(async()=>{
         try {
@@ -534,52 +747,45 @@ export default function App() {
           const aiId=uidGen();
           await set(ref(db,`messages/${activeChat}/${aiId}`),{id:aiId,chatId:activeChat,text:aiText,from:SUPPORT_ID,senderName:"الدعم الفني",time:nowStr(),type:"text",isSupport:true,createdAt:Date.now()+500});
           await update(ref(db,`userChats/${user.uid}/${activeChat}`),{lastMessage:aiText.slice(0,50),lastTime:nowStr(),order:Date.now()+1});
-          // Send ticket to admin
           const tId=`ticket_${user.uid}`;
           await set(ref(db,`support/${tId}/info`),{userId:user.uid,username:userData.username,displayName:userData.displayName,status:"open",createdAt:Date.now()});
-          const tmId=uidGen();
-          await set(ref(db,`support/${tId}/messages/${tmId}`),{id:tmId,text,from:user.uid,time:nowStr(),createdAt:Date.now()});
-          const trId=uidGen();
-          await set(ref(db,`support/${tId}/messages/${trId}`),{id:trId,text:aiText,from:"ai_bot",time:nowStr(),createdAt:Date.now()+500});
-        } catch(e){}
+          const tmId=uidGen();await set(ref(db,`support/${tId}/messages/${tmId}`),{id:tmId,text,from:user.uid,time:nowStr(),createdAt:Date.now()});
+          const trId=uidGen();await set(ref(db,`support/${tId}/messages/${trId}`),{id:trId,text:aiText,from:"ai_bot",time:nowStr(),createdAt:Date.now()+500});
+        }catch{}
       },1200);
     }
-    // BotFather logic
-    if(activeChatData?.type==="official_bot"&&activeChatData?.username==="botfather"){
-      handleBotFatherMsg(text,activeChat);
-    }
+    // BotFather
+    if(activeChatData?.type==="official_bot"&&activeChatData?.username==="botfather") handleBotFatherMsg(text,activeChat);
     setInput("");setReplyTo(null);setShowEmoji(false);
     inputRef.current?.focus();
-  },[input,activeChat,user,userData,replyTo,activeChatData]);
+  },[input,activeChat,user,userData,replyTo,activeChatData,editingMsg]);
 
   const handleBotFatherMsg=useCallback(async(text,chatId)=>{
     const t=text.trim().toLowerCase();
     let reply="";
-    if(t==="/start"||t==="مرحبا"||t==="hi"||t==="hello"){
-      reply=`مرحباً! أنا BotFather ✈️\n\nيمكنني مساعدتك في:\n/newbot — إنشاء بوت جديد\n/mybots — عرض بوتاتك\n/token — الحصول على توكن\n\nاكتب الأمر للبدء!`;
+    if(t==="/start"||t==="مرحبا"||t==="hi"){
+      reply="مرحباً! أنا BotFather ✈️\n\n/newbot — إنشاء بوت جديد\n/mybots — عرض بوتاتك\n\nاكتب الأمر للبدء!";
     } else if(t==="/newbot"||t.includes("جديد")){
-      reply="اختر اسماً لبوتك:\n(يجب أن يبدأ بحرف ويحتوي على أرقام وحروف فقط، بدون مسافات)";
+      reply="أرسل اسم مستخدم للبوت:\n(يجب أن ينتهي بـ bot مثال: mybot_bot)";
     } else if(t.endsWith("bot")||t.endsWith("_bot")){
-      const token=`${Date.now()}:AAF${Math.random().toString(36).slice(2,20).toUpperCase()}`;
       const botUsername=t.replace("@","").toLowerCase();
-      if(botUsername.length<5){reply="اسم البوت قصير جداً! يجب 5 أحرف على الأقل."; }
+      if(botUsername.length<5){reply="اسم البوت قصير جداً!"; }
       else {
-        const botChatId=`botcreated_${uidGen()}`;
-        await set(ref(db,`bots/${botChatId}`),{id:botChatId,username:botUsername,name:botUsername,token,creatorId:user?.uid,createdAt:Date.now()});
-        if(user?.uid) await set(ref(db,`userBots/${user.uid}/${botChatId}`),{username:botUsername,token,createdAt:Date.now()});
-        reply=`✅ تم إنشاء البوت!\n\n🤖 البوت: @${botUsername}\n🔑 التوكن:\n\`${token}\`\n\n⚠️ احتفظ بالتوكن في مكان آمن ولا تشاركه!`;
+        const token=`${Date.now()}:AAF${Math.random().toString(36).slice(2,20).toUpperCase()}`;
+        const botId=uidGen();
+        await set(ref(db,`bots/${botId}`),{id:botId,username:botUsername,name:botUsername,token,creatorId:user?.uid,createdAt:Date.now()});
+        if(user?.uid) await set(ref(db,`userBots/${user.uid}/${botId}`),{id:botId,username:botUsername,token,createdAt:Date.now()});
+        reply=`✅ تم إنشاء البوت!\n\n🤖 @${botUsername}\n🔑 التوكن:\n${token}\n\n⚠️ احتفظ بالتوكن في مكان آمن!`;
       }
     } else if(t==="/mybots"){
       if(user?.uid){
-        const snap=await get(ref(db,`userBots/${user?.uid}`));
+        const snap=await get(ref(db,`userBots/${user.uid}`));
         if(snap.exists()){
           const bots=Object.values(snap.val());
-          reply=`🤖 بوتاتك (${bots.length}):\n\n${bots.map(b=>`• @${b.username}\n  التوكن: ${b.token?.slice(0,20)}...`).join("\n\n")}`;
-        } else reply="لا توجد بوتات بعد. اكتب /newbot لإنشاء بوت!";
+          reply=`🤖 بوتاتك (${bots.length}):\n\n${bots.map(b=>`• @${b.username}\n  ${b.token?.slice(0,25)}...`).join("\n\n")}`;
+        } else reply="لا توجد بوتات. اكتب /newbot";
       }
-    } else {
-      reply="أرسل /start للبدء\n/newbot — بوت جديد\n/mybots — بوتاتك";
-    }
+    } else reply="أرسل /start للبدء\n/newbot — بوت جديد\n/mybots — بوتاتك";
     if(reply){
       setTimeout(async()=>{
         const rid=uidGen();
@@ -590,13 +796,63 @@ export default function App() {
   },[user]);
 
   const escalateToHuman=useCallback(async()=>{
-    if(!activeChat||!user||!userData) return;
+    if(!activeChat||!user) return;
     const ticketNum=`TKT-${Date.now().toString().slice(-6)}`;
-    const msgId=uidGen();
-    await set(ref(db,`messages/${activeChat}/${msgId}`),{id:msgId,chatId:activeChat,text:`📋 تم إرسال رسالتك إلى الدعم البشري.\n🎫 رقم الطلب: ${ticketNum}\nسيتم الرد في أقرب وقت. شكراً لصبرك! ✅`,from:SUPPORT_ID,senderName:"الدعم الفني",time:nowStr(),type:"system_info",isSupport:true,createdAt:Date.now()});
+    const mid=uidGen();
+    await set(ref(db,`messages/${activeChat}/${mid}`),{id:mid,chatId:activeChat,text:`📋 تم إرسال طلبك للدعم البشري.\n🎫 رقم الطلب: ${ticketNum}\nسيتم الرد قريباً ✅`,from:SUPPORT_ID,senderName:"الدعم الفني",time:nowStr(),type:"system_info",isSupport:true,createdAt:Date.now()});
     await update(ref(db,`support/ticket_${user.uid}/info`),{status:"awaiting_human",ticketNum});
-    await update(ref(db,`userChats/${user.uid}/${activeChat}`),{lastMessage:"تم إرسال طلبك",lastTime:nowStr(),order:Date.now()});
-  },[activeChat,user,userData]);
+  },[activeChat,user]);
+
+  const addReaction=useCallback(async(msgId,emoji)=>{
+    if(!user||!activeChat) return;
+    const rPath=`reactions/${activeChat}/${msgId}/${emoji}`;
+    const snap=await get(ref(db,rPath));
+    if(snap.exists()){
+      const users=snap.val();
+      if(users[user.uid]){await remove(ref(db,`${rPath}/${user.uid}`));}
+      else {await set(ref(db,`${rPath}/${user.uid}`),true);}
+    } else {await set(ref(db,`${rPath}/${user.uid}`),true);}
+    setCtxMenu(null);
+  },[user,activeChat]);
+
+  const pinMessage=useCallback(async(msg)=>{
+    if(!activeChat) return;
+    // Unpin all first
+    const snap=await get(ref(db,`messages/${activeChat}`));
+    if(snap.exists()){
+      const batch=[];
+      Object.values(snap.val()).forEach(m=>{if(m.pinned)batch.push(update(ref(db,`messages/${activeChat}/${m.id}`),{pinned:false}));});
+      await Promise.all(batch);
+    }
+    // Pin this message
+    await update(ref(db,`messages/${activeChat}/${msg.id}`),{pinned:true});
+    setCtxMenu(null);
+  },[activeChat]);
+
+  const sendReport=useCallback(async(reason,note)=>{
+    if(!user||!reportTarget) return;
+    const rid=uidGen();
+    await set(ref(db,`reports/${rid}`),{id:rid,reason,note,reporterId:user.uid,reporterUsername:userData?.username,targetType:reportTarget.type||"message",targetId:reportTarget.id,targetChatId:activeChat,createdAt:Date.now(),status:"pending"});
+    setReportTarget(null);
+    alert("✅ تم إرسال البلاغ. شكراً لمساعدتنا.");
+  },[user,userData,reportTarget,activeChat]);
+
+  const openMentionProfile=useCallback(async(username)=>{
+    const snap=await get(ref(db,`usernames/${username.toLowerCase()}`));
+    if(snap.exists()){
+      const uid2=snap.val();
+      const uSnap=await get(ref(db,`users/${uid2}`));
+      if(uSnap.exists()) setProfileViewer(uSnap.val());
+    } else {
+      // Check if it's a channel/group
+      const cSnap=await get(ref(db,`chatUsernames/${username.toLowerCase()}`));
+      if(cSnap.exists()){
+        const chatId=cSnap.val();
+        const chSnap=await get(ref(db,`chats/${chatId}`));
+        if(chSnap.exists()) setProfileViewer(chSnap.val());
+      }
+    }
+  },[]);
 
   const handleFile=useCallback((file,isImg)=>{
     if(!file) return;
@@ -614,13 +870,10 @@ export default function App() {
     if(editProfile.username!==userData?.username){
       if(editProfile.username.length<5){alert("اسم المستخدم 5 أحرف على الأقل");return;}
       if(/^\d/.test(editProfile.username)){alert("اسم المستخدم لا يبدأ برقم");return;}
-      if(!/^[a-zA-Z][a-zA-Z0-9_]{4,}$/.test(editProfile.username)){alert("حروف وأرقام فقط، يبدأ بحرف");return;}
-      const usSnap=await get(ref(db,`usernames/${editProfile.username.toLowerCase()}`));
-      if(usSnap.exists()&&usSnap.val()!==user.uid){alert("اسم المستخدم مستخدم بالفعل");return;}
+      const [usSnap,cSnap]=await Promise.all([get(ref(db,`usernames/${editProfile.username.toLowerCase()}`)),get(ref(db,`chatUsernames/${editProfile.username.toLowerCase()}`))]);
+      if((usSnap.exists()&&usSnap.val()!==user.uid)||cSnap.exists()){alert(`اسم المستخدم @${editProfile.username} مأخوذ مسبقاً`);return;}
       if(userData?.username) await remove(ref(db,`usernames/${userData.username}`));
       await set(ref(db,`usernames/${editProfile.username.toLowerCase()}`),user.uid);
-      const botId=`bot_${user.uid}`;const nid=uidGen();
-      await set(ref(db,`messages/${botId}/${nid}`),{id:nid,chatId:botId,text:`🔄 تم تغيير اسم المستخدم\nمن: @${userData?.username}\nإلى: @${editProfile.username}\n🕐 ${nowFull()}`,from:APP_BOT_ID,senderName:"DFGFD",time:nowStr(),type:"text",isOfficialBot:true,createdAt:Date.now()});
     }
     await update(ref(db,`users/${user.uid}`),{displayName:editProfile.displayName,username:editProfile.username.toLowerCase(),bio:editProfile.bio,photoURL:editProfile.photo});
     await updateProfile(user,{displayName:editProfile.displayName});
@@ -631,21 +884,17 @@ export default function App() {
 
   const createConvo=useCallback(async(type)=>{
     if(!newForm.name.trim()||!user||!userData) return;
-    if(!newForm.username.trim()){alert("يجب إدخال اسم مستخدم للقناة/المجموعة");return;}
+    if(!newForm.username.trim()){alert("يجب إدخال اسم مستخدم");return;}
     if(newForm.username.length<5){alert("اسم المستخدم 5 أحرف على الأقل");return;}
     if(/^\d/.test(newForm.username)){alert("اسم المستخدم لا يبدأ برقم");return;}
-    if(!/^[a-zA-Z][a-zA-Z0-9_]{4,}$/.test(newForm.username)){alert("حروف وأرقام وشرطة سفلية فقط، يبدأ بحرف");return;}
-    // Check username uniqueness across users AND chats
-    const [uCheck,cCheck]=await Promise.all([
-      get(ref(db,`usernames/${newForm.username.toLowerCase()}`)),
-      get(ref(db,`chatUsernames/${newForm.username.toLowerCase()}`))
-    ]);
+    if(!/^[a-zA-Z][a-zA-Z0-9_]{4,}$/.test(newForm.username)){alert("حروف وأرقام فقط، يبدأ بحرف");return;}
+    const [uCheck,cCheck]=await Promise.all([get(ref(db,`usernames/${newForm.username.toLowerCase()}`)),get(ref(db,`chatUsernames/${newForm.username.toLowerCase()}`))]);
     if(uCheck.exists()){alert(`اسم المستخدم @${newForm.username} مأخوذ مسبقاً`);return;}
-    if(cCheck.exists()){alert(`اسم المستخدم @${newForm.username} مأخوذ مسبقاً من قناة أو مجموعة`);return;}
+    if(cCheck.exists()){alert(`اسم المستخدم @${newForm.username} مستخدم في قناة أو مجموعة أخرى`);return;}
     const chatId=uidGen();
-    const chatData={id:chatId,type,name:newForm.name.trim(),username:(newForm.username||chatId.slice(0,8)).toLowerCase(),bio:newForm.bio||"",photoURL:"",ownerId:user.uid,members:[user.uid],admins:[user.uid],verified:false,createdAt:Date.now(),...(type==="channel"?{subscribers:1,subscribersList:[user.uid]}:{})};
+    const chatData={id:chatId,type,name:newForm.name.trim(),username:newForm.username.toLowerCase(),bio:newForm.bio||"",photoURL:"",ownerId:user.uid,members:[user.uid],admins:[user.uid],verified:false,createdAt:Date.now(),...(type==="channel"?{subscribers:1,subscribersList:[user.uid]}:{})};
     await set(ref(db,`chats/${chatId}`),chatData);
-    if(newForm.username) await set(ref(db,`chatUsernames/${newForm.username.toLowerCase()}`),chatId);
+    await set(ref(db,`chatUsernames/${newForm.username.toLowerCase()}`),chatId);
     await set(ref(db,`userChats/${user.uid}/${chatId}`),{chatId,lastMessage:"تم الإنشاء",lastTime:nowStr(),unread:0,order:Date.now(),...chatData});
     const wid=uidGen();
     await set(ref(db,`messages/${chatId}/${wid}`),{id:wid,chatId,text:`🎉 تم إنشاء ${type==="channel"?"القناة":"المجموعة"} "${newForm.name}"`,from:"system",time:nowStr(),type:"system",createdAt:Date.now()});
@@ -677,6 +926,7 @@ export default function App() {
       await set(ref(db,`userChats/${user.uid}/${chatId}`),{chatId,lastMessage:"",lastTime:"",unread:0,order:Date.now(),...cd});
       await set(ref(db,`userChats/${targetUser.uid}/${chatId}`),{chatId,lastMessage:"",lastTime:"",unread:0,order:Date.now(),...cd});
     }
+    setSearchMode(false);setSearch("");setModal(null);setProfileViewer(null);
     openChat(chatId,snap.exists()?snap.val():{id:chatId,type:"private",name:targetUser.displayName,color:targetUser.color,photoURL:targetUser.photoURL});
   },[user,openChat]);
 
@@ -691,20 +941,21 @@ export default function App() {
 
   const openBotFather=useCallback(async()=>{
     if(!user) return;
-    const bfChatId=`botfather_${user.uid}`;
-    const snap=await get(ref(db,`chats/${bfChatId}`));
+    const bfId=`botfather_${user.uid}`;
+    const snap=await get(ref(db,`chats/${bfId}`));
     if(!snap.exists()){
-      const cd={id:bfChatId,type:"official_bot",name:"BotFather",username:"botfather",isOfficial:true,verified:true,members:[user.uid,BOT_FATHER_ID],createdAt:Date.now(),photoURL:""};
-      await set(ref(db,`chats/${bfChatId}`),cd);
-      await set(ref(db,`userChats/${user.uid}/${bfChatId}`),{chatId:bfChatId,lastMessage:"أنشئ بوتك الآن",lastTime:nowStr(),unread:1,order:Date.now(),type:"official_bot",name:"BotFather",verified:true,color:"#9C27B0"});
+      const cd={id:bfId,type:"official_bot",name:"BotFather",username:"botfather",isOfficial:true,verified:true,members:[user.uid,BOT_FATHER_ID],createdAt:Date.now(),photoURL:""};
+      await set(ref(db,`chats/${bfId}`),cd);
+      await set(ref(db,`userChats/${user.uid}/${bfId}`),{chatId:bfId,lastMessage:"أنشئ بوتك الآن",lastTime:nowStr(),unread:1,order:Date.now(),type:"official_bot",name:"BotFather",verified:true,color:"#9C27B0"});
       const wid=uidGen();
-      await set(ref(db,`messages/${bfChatId}/${wid}`),{id:wid,chatId:bfChatId,text:"مرحباً! أنا BotFather ✈️\n\nأرسل /newbot لإنشاء بوت جديد\n/mybots لعرض بوتاتك",from:BOT_FATHER_ID,senderName:"BotFather",time:nowStr(),type:"text",isOfficialBot:true,createdAt:Date.now()});
+      await set(ref(db,`messages/${bfId}/${wid}`),{id:wid,chatId:bfId,text:"مرحباً! أنا BotFather ✈️\n\n/newbot — إنشاء بوت (الاسم يجب أن ينتهي بـ bot)\n/mybots — عرض بوتاتك",from:BOT_FATHER_ID,senderName:"BotFather",time:nowStr(),type:"text",isOfficialBot:true,createdAt:Date.now()});
     }
-    openChat(bfChatId,{id:bfChatId,type:"official_bot",name:"BotFather",username:"botfather",verified:true});
+    openChat(bfId,{id:bfId,type:"official_bot",name:"BotFather",username:"botfather",verified:true});
     setModal(null);setShowMenu(false);
   },[user,openChat]);
 
   const EMOJIS=["😀","😂","😍","😊","🥳","😎","🤩","😭","😤","🥺","❤️","🔥","💯","⭐","🎉","👍","👋","🙏","💪","✅","🚀","💡","🎵","🌟","😅","🤔","💬","📱","🎯","🏆","💎","🌈","🎁","🍕","☕","🌸","🦋","🎮","📸","🔑"];
+  const REACT_EMOJIS=["❤️","👍","😂","😮","😢","🔥","🎉","👎"];
 
   const isChannel=activeChatData?.type==="channel";
   const isGroup=activeChatData?.type==="group";
@@ -715,8 +966,20 @@ export default function App() {
   const canSend=!isChannel||(isChannel&&isMine);
   const chatName=activeChatData?.name||"محادثة";
   const chatType=activeChatData?.type;
+  const isAdminOfChat=isMine||(activeChatData?.admins||[]).includes(user?.uid);
 
-  // Search results renderer
+  // Context menu actions
+  const ctxActions=ctxMenu?[
+    {l:"↩ ردّ",ic:"back",a:()=>{setReplyTo(ctxMenu.msg);setCtxMenu(null);}},
+    {l:"⎘ نسخ",a:()=>{navigator.clipboard?.writeText(ctxMenu.msg?.text||"");setCtxMenu(null);}},
+    ...(ctxMenu.msg?.from===user?.uid&&!ctxMenu.msg?.isOfficialBot?[{l:"✏️ تعديل",a:()=>{setEditingMsg(ctxMenu.msg);setInput(ctxMenu.msg.text||"");setCtxMenu(null);inputRef.current?.focus();}}]:[]),
+    ...(isAdminOfChat||ctxMenu.msg?.from===user?.uid?[{l:"📌 تثبيت",a:()=>pinMessage(ctxMenu.msg)}]:[]),
+    {l:"🔗 نسخ الرابط",a:()=>{navigator.clipboard?.writeText(`Termin/${activeChatData?.username||activeChat}/${ctxMenu.msg?.id}`);setCtxMenu(null);alert("تم نسخ الرابط!");}},
+    {l:"🔖 حفظ",a:async()=>{const s=chats.find(c=>c.type==="saved");if(s){const id=uidGen();await set(ref(db,`messages/${s.chatId||s.id}/${id}`),{...ctxMenu.msg,id,chatId:s.chatId||s.id,createdAt:Date.now()+1});}setCtxMenu(null);}},
+    ...(isChannel||isGroup?[{l:"🚩 بلاغ",a:()=>{setReportTarget(ctxMenu.msg);setCtxMenu(null);},danger:true}]:[]),
+    ...(ctxMenu.msg?.from===user?.uid?[{l:"🗑 حذف",a:async()=>{if(activeChat)await remove(ref(db,`messages/${activeChat}/${ctxMenu.msg.id}`));setCtxMenu(null);},danger:true}]:[]),
+  ]:[];
+
   const renderSearch=()=>(
     <div style={{overflowY:"auto",flex:1}}>
       {!searchResults.length&&search.trim()&&<div style={{padding:"40px",textAlign:"center",color:T.textSec,fontSize:"14px"}}>لا توجد نتائج لـ "{search}"</div>}
@@ -725,26 +988,25 @@ export default function App() {
         const isCh=r.resultType==="channel";
         const isBot=r.resultType==="official_bot"||r.resultType==="bot";
         return (
-          <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${T.border}18`,transition:"background 0.15s"}}
+          <div key={i} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px 14px",cursor:"pointer",borderBottom:`1px solid ${T.border}18`}}
             onMouseEnter={e=>e.currentTarget.style.background=T.hover} onMouseLeave={e=>e.currentTarget.style.background="transparent"}
             onClick={()=>{
-              if(isU){ openPrivateChat(r); setSearchMode(false); setSearch(""); }
-              else if(isCh){ joinChannel(r); setSearchMode(false); setSearch(""); }
-              else { openChat(r.id,r); setSearchMode(false); setSearch(""); }
+              if(isU){openPrivateChat(r);}
+              else if(isCh){joinChannel(r);}
+              else {openChat(r.id,r);}
+              setSearchMode(false);setSearch("");
             }}>
-            <Av name={r.name||r.displayName} color={r.color||rColor(r.name||r.displayName)} size={46} verified={r.verified} photo={r.photoURL} fraud={r.isFraud}/>
+            <Av name={r.name||r.displayName} color={r.color||rColor(r.name||r.displayName)} size={46} verified={r.verified} photo={r.photoURL} fraud={r.isFraud}
+              onClick={e=>{e.stopPropagation();setProfileViewer(r);}}/>
             <div style={{flex:1}}>
               <div style={{color:T.text,fontWeight:"600",fontSize:"14.5px",display:"flex",alignItems:"center",gap:"5px"}}>
                 {isCh&&<Ic n="channel" s={12} c={T.gold}/>}
                 {r.resultType==="group"&&<Ic n="group" s={12} c={T.accentBtn}/>}
                 {isBot&&<span style={{fontSize:"12px"}}>🤖</span>}
                 {r.name||r.displayName}
-                {r.verified&&<Ic n="check" s={12} c={T.verified}/>}
-                {r.isFraud&&<span style={{color:T.danger,fontSize:"10px",background:`${T.danger}20`,padding:"1px 5px",borderRadius:"5px"}}>احتيال</span>}
+                {(r.verified||r.isOfficial)&&<Ic n="check" s={12} c={T.verified}/>}
               </div>
-              <div style={{color:T.textSec,fontSize:"12px"}}>
-                @{r.username} · {isCh?`${fmtSubs(r.subscribers||0)} مشترك`:r.resultType==="group"?`${r.members?.length||0} عضو`:"مستخدم"}
-              </div>
+              <div style={{color:T.textSec,fontSize:"12px"}}>@{r.username} · {isCh?`${fmtSubs(r.subscribers||0)} مشترك`:r.resultType==="group"?`${r.members?.length||0} عضو`:"مستخدم"}</div>
             </div>
             {isCh&&!chats.find(c=>(c.id||c.chatId)===r.id)&&(
               <button onClick={e=>{e.stopPropagation();joinChannel(r);}} style={{background:`${T.accentBtn}20`,border:`1px solid ${T.accentBtn}40`,borderRadius:"8px",padding:"6px 12px",color:T.accentBtn,cursor:"pointer",fontFamily:"inherit",fontSize:"12px",fontWeight:"600"}}>انضمام</button>
@@ -769,20 +1031,24 @@ export default function App() {
     <div style={{display:"flex",height:"100vh",width:"100%",background:T.bg,fontFamily:"'Segoe UI',Tahoma,sans-serif",direction:"rtl",overflow:"hidden"}}
       onClick={()=>{setShowMenu(false);setAttachMenu(false);setCtxMenu(null);setShowEmoji(false);}}>
 
+      {/* Profile Viewer */}
+      {profileViewer&&<ProfileViewer profile={profileViewer} onClose={()=>setProfileViewer(null)} onChat={openPrivateChat} currentUser={user} chats={chats}/>}
+
+      {/* Report Modal */}
+      {reportTarget&&<ReportModal onClose={()=>setReportTarget(null)} onReport={sendReport}/>}
+
       {/* SIDEBAR */}
       <div style={{width:showSidebar?(isMobile?"100%":"360px"):"0",minWidth:0,background:T.sidebar,borderLeft:`1px solid ${T.border}`,display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden",transition:"width 0.25s",position:isMobile?"absolute":"relative",height:"100%",zIndex:isMobile?20:1}}>
-        {/* Top Bar */}
         <div style={{padding:"10px 12px",display:"flex",alignItems:"center",gap:"8px",borderBottom:`1px solid ${T.border}`,background:T.sidebar,position:"relative",zIndex:50}}>
           {bottomTab==="chats"&&(<>
             <button onClick={e=>{e.stopPropagation();setShowMenu(!showMenu);}} style={{background:"none",border:"none",cursor:"pointer",padding:"6px",borderRadius:"50%",display:"flex"}} onMouseEnter={e=>e.currentTarget.style.background=T.hover} onMouseLeave={e=>e.currentTarget.style.background="none"}><Ic n="menu" s={20}/></button>
             <div style={{flex:1,display:"flex",alignItems:"center",background:T.inputBg,borderRadius:"22px",padding:"7px 14px",gap:"8px"}} onClick={()=>setSearchMode(true)}>
               <Ic n="search" s={15}/>
-              <input value={search} onChange={e=>{setSearch(e.target.value);setSearchMode(true);}} onFocus={()=>setSearchMode(true)} placeholder="بحث..." style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"14px",flex:1,direction:"rtl",fontFamily:"inherit"}}/>
+              <input value={search} onChange={e=>{setSearch(e.target.value);setSearchMode(true);}} onFocus={()=>setSearchMode(true)} placeholder="بحث فوري..." style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"14px",flex:1,direction:"rtl",fontFamily:"inherit"}}/>
               {search&&<button onClick={()=>{setSearch("");setSearchMode(false);}} style={{background:"none",border:"none",cursor:"pointer"}}><Ic n="close" s={14}/></button>}
             </div>
           </>)}
           {bottomTab!=="chats"&&<div style={{flex:1,color:T.text,fontSize:"16px",fontWeight:"800",paddingRight:"6px"}}>{bottomTab==="settings"?"الإعدادات":bottomTab==="contacts"?"جهات الاتصال":""}</div>}
-          {/* Dropdown */}
           {showMenu&&(
             <div style={{position:"absolute",top:"54px",right:"8px",background:"#1c2d3d",borderRadius:"13px",padding:"6px 0",boxShadow:"0 8px 32px rgba(0,0,0,0.5)",zIndex:300,minWidth:"210px",border:`1px solid ${T.border}`}} onClick={e=>e.stopPropagation()}>
               {[
@@ -795,7 +1061,7 @@ export default function App() {
                 {n:"settings",l:"الإعدادات",a:()=>{setBottomTab("settings");setShowMenu(false);}},
                 ...(isOwner?[{n:"crown",l:"لوحة الإدارة",a:()=>{window.open("/admin","_blank");setShowMenu(false);}}]:[]),
               ].map(item=>(
-                <button key={item.l} onClick={item.a} style={{display:"flex",alignItems:"center",gap:"12px",width:"100%",padding:"11px 16px",background:"none",border:"none",color:T.text,cursor:"pointer",fontFamily:"inherit",fontSize:"14px",transition:"background 0.15s"}}
+                <button key={item.l} onClick={item.a} style={{display:"flex",alignItems:"center",gap:"12px",width:"100%",padding:"11px 16px",background:"none",border:"none",color:T.text,cursor:"pointer",fontFamily:"inherit",fontSize:"14px"}}
                   onMouseEnter={e=>e.currentTarget.style.background=T.hover} onMouseLeave={e=>e.currentTarget.style.background="none"}>
                   <Ic n={item.n} s={18} c={T.accentBtn}/>{item.l}
                 </button>
@@ -804,7 +1070,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Brand */}
         {bottomTab==="chats"&&!searchMode&&(
           <div style={{padding:"5px 14px 2px",display:"flex",alignItems:"center",gap:"7px"}}>
             <span style={{fontSize:"15px"}}>✈️</span>
@@ -813,19 +1078,16 @@ export default function App() {
           </div>
         )}
 
-        {/* Sidebar Content */}
         <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column"}}>
-          {bottomTab==="settings"&&<SettingsPanel user={user} userData={userData} setUserData={setUserData} isOwner={isOwner} openSupportChat={openSupportChat} setModal={setModal}/>}
+          {bottomTab==="settings"&&<SettingsPanel user={user} userData={userData} setUserData={setUserData} isOwner={isOwner} openSupportChat={openSupportChat} setModal={setModal} db={db}/>}
           {bottomTab==="contacts"&&(
             <div style={{padding:"12px"}}>
-              <div style={{color:T.textSec,fontSize:"13px",fontWeight:"600",padding:"8px 4px"}}>جهات الاتصال</div>
               {chats.filter(c=>c.type==="private").map(c=>(
                 <div key={c.id||c.chatId} onClick={()=>openChat(c.chatId||c.id,c)} style={{display:"flex",alignItems:"center",gap:"12px",padding:"10px",borderRadius:"12px",cursor:"pointer",marginBottom:"4px"}} onMouseEnter={e=>e.currentTarget.style.background=T.hover} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                   <Av name={c.name} color={c.color||rColor(c.name)} size={44}/>
                   <div style={{color:T.text,fontWeight:"600",fontSize:"14px"}}>{c.name}</div>
                 </div>
               ))}
-              {!chats.filter(c=>c.type==="private").length&&<div style={{padding:"30px",textAlign:"center",color:T.textSec,fontSize:"13px"}}>لا توجد جهات اتصال</div>}
             </div>
           )}
           {bottomTab==="chats"&&(searchMode&&search?renderSearch():(
@@ -838,9 +1100,10 @@ export default function App() {
                 const isOB=chat.type==="official_bot";
                 const isSup=chat.type==="support";
                 return (
-                  <div key={cid} onClick={()=>openChat(cid,chat)} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 14px",cursor:"pointer",background:isActive?T.accent:"transparent",borderBottom:`1px solid ${T.border}18`,transition:"background 0.15s"}}
+                  <div key={cid} onClick={()=>openChat(cid,chat)} style={{display:"flex",alignItems:"center",gap:"12px",padding:"9px 14px",cursor:"pointer",background:isActive?T.accent:"transparent",borderBottom:`1px solid ${T.border}18`}}
                     onMouseEnter={e=>{if(!isActive)e.currentTarget.style.background=T.hover;}} onMouseLeave={e=>{if(!isActive)e.currentTarget.style.background="transparent";}}>
-                    <Av name={name} color={chat.color||rColor(name)} size={52} online={chat.type==="private"} verified={chat.verified||isOB} photo={chat.photoURL}/>
+                    <Av name={name} color={chat.color||rColor(name)} size={52} online={chat.type==="private"} verified={chat.verified||isOB} photo={chat.photoURL}
+                      onClick={e=>{e.stopPropagation();setProfileViewer(chat.type==="private"?{displayName:name,username:chat.username,photoURL:chat.photoURL,color:chat.color,bio:""}:chat);}}/>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                         <span style={{color:T.text,fontWeight:"600",fontSize:"15px",display:"flex",alignItems:"center",gap:"4px"}}>
@@ -855,7 +1118,7 @@ export default function App() {
                         <span style={{color:T.textSec,fontSize:"11px",flexShrink:0}}>{chat.lastTime}</span>
                       </div>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"2px"}}>
-                        <span style={{color:T.textSec,fontSize:"13px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"180px"}}>{isSup?(chat.subtitle||"الدعم"):chat.lastMessage}</span>
+                        <span style={{color:T.textSec,fontSize:"13px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"180px"}}>{isSup?"الدعم":chat.lastMessage}</span>
                         {chat.unread>0&&<span style={{background:T.unread,color:"#fff",borderRadius:"12px",minWidth:"20px",height:"20px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",fontWeight:"700",padding:"0 5px"}}>{chat.unread>99?"99+":chat.unread}</span>}
                       </div>
                     </div>
@@ -866,7 +1129,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* FAB */}
         {bottomTab==="chats"&&!searchMode&&(
           <div style={{padding:"8px 14px 5px",borderTop:`1px solid ${T.border}`,display:"flex",justifyContent:"flex-end",background:T.sidebar}}>
             <button onClick={e=>{e.stopPropagation();setModal("fabMenu");}} style={{background:T.accentBtn,border:"none",borderRadius:"50%",width:"46px",height:"46px",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",boxShadow:"0 4px 14px rgba(82,136,193,0.45)"}} onMouseEnter={e=>e.currentTarget.style.transform="scale(1.1)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
@@ -875,7 +1137,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Bottom Tab */}
         <div style={{display:"flex",background:T.tabBar,borderTop:`1px solid ${T.border}`,padding:"6px 0"}}>
           {[{k:"chats",n:"menu",l:"المحادثات"},{k:"contacts",n:"contacts",l:"جهات الاتصال"},{k:"settings",n:"settings",l:"الإعدادات"}].map(tab=>(
             <button key={tab.k} onClick={()=>{setBottomTab(tab.k);setSearchMode(false);setSearch("");}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"3px",background:"none",border:"none",cursor:"pointer",padding:"6px 4px"}}>
@@ -898,10 +1159,10 @@ export default function App() {
           </div>
         ):(
           <>
-            {/* Chat Header */}
+            {/* Header */}
             <div style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:"10px",background:T.sidebar,borderBottom:`1px solid ${T.border}`,flexShrink:0}}>
               {isMobile&&<button onClick={()=>{setShowSidebar(true);setActiveChat(null);setActiveChatData(null);}} style={{background:"none",border:"none",cursor:"pointer",padding:"4px",display:"flex"}}><Ic n="back" s={22}/></button>}
-              <div style={{display:"flex",alignItems:"center",gap:"11px",flex:1,cursor:"pointer"}} onClick={()=>setShowInfo(!showInfo)}>
+              <div style={{display:"flex",alignItems:"center",gap:"11px",flex:1,cursor:"pointer"}} onClick={()=>setProfileViewer(activeChatData)}>
                 <Av name={chatName} color={activeChatData?.color||rColor(chatName)} size={40} online={chatType==="private"} verified={activeChatData?.verified||isOfficialBot} photo={activeChatData?.photoURL}/>
                 <div>
                   <div style={{color:T.text,fontWeight:"700",fontSize:"15px",display:"flex",alignItems:"center",gap:"5px"}}>
@@ -909,11 +1170,7 @@ export default function App() {
                     {(activeChatData?.verified||isOfficialBot)&&<Ic n="check" s={13} c={T.verified}/>}
                   </div>
                   <div style={{color:T.textSec,fontSize:"12px"}}>
-                    {isSaved?"رسائلك المحفوظة":
-                     isSupport?"الدعم":
-                     isOfficialBot?`✈️ مساعد رسمي`:
-                     isGroup?`${activeChatData?.members?.length||0} عضو`:
-                     isChannel?`${fmtSubs(activeChatData?.subscribers||0)} مشترك`:""}
+                    {isSaved?"رسائلك المحفوظة":isSupport?"الدعم":isOfficialBot?"✈️ مساعد رسمي":isGroup?`${activeChatData?.members?.length||0} عضو`:isChannel?`${fmtSubs(activeChatData?.subscribers||0)} مشترك`:""}
                   </div>
                 </div>
               </div>
@@ -924,39 +1181,78 @@ export default function App() {
               </div>
             </div>
 
-            {/* Reply Banner */}
-            {replyTo&&(
-              <div style={{padding:"7px 16px",background:T.panel,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"10px"}}>
-                <div style={{width:"3px",height:"30px",background:T.accentBtn,borderRadius:"2px",flexShrink:0}}/>
+            {/* Pinned Message */}
+            {pinnedMsg&&(
+              <div style={{padding:"8px 14px",background:T.panel,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"10px",cursor:"pointer"}} onClick={()=>{const el=document.getElementById(`msg_${pinnedMsg.id}`);el?.scrollIntoView({behavior:"smooth"});}}>
+                <Ic n="pin" s={16} c={T.accentBtn}/>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:T.accentBtn,fontSize:"11.5px",fontWeight:"700"}}>{replyTo.senderName||"أنت"}</div>
-                  <div style={{color:T.textSec,fontSize:"12.5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{replyTo.text}</div>
+                  <div style={{color:T.accentBtn,fontSize:"11px",fontWeight:"700"}}>رسالة مثبّتة</div>
+                  <div style={{color:T.textSec,fontSize:"12.5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{pinnedMsg.text}</div>
                 </div>
-                <button onClick={()=>setReplyTo(null)} style={{background:"none",border:"none",cursor:"pointer"}}><Ic n="close" s={15}/></button>
+                {isAdminOfChat&&<button onClick={e=>{e.stopPropagation();update(ref(db,`messages/${activeChat}/${pinnedMsg.id}`),{pinned:false});}} style={{background:"none",border:"none",cursor:"pointer"}}><Ic n="close" s={14}/></button>}
+              </div>
+            )}
+
+            {/* Reply/Edit Banner */}
+            {(replyTo||editingMsg)&&(
+              <div style={{padding:"7px 16px",background:T.panel,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",gap:"10px"}}>
+                <div style={{width:"3px",height:"30px",background:editingMsg?T.gold:T.accentBtn,borderRadius:"2px",flexShrink:0}}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:editingMsg?T.gold:T.accentBtn,fontSize:"11.5px",fontWeight:"700"}}>{editingMsg?"✏️ تعديل الرسالة":(replyTo?.senderName||"أنت")}</div>
+                  <div style={{color:T.textSec,fontSize:"12.5px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{editingMsg?editingMsg.text:replyTo?.text}</div>
+                </div>
+                <button onClick={()=>{setReplyTo(null);setEditingMsg(null);setInput("");}} style={{background:"none",border:"none",cursor:"pointer"}}><Ic n="close" s={15}/></button>
               </div>
             )}
 
             {/* Messages */}
             <div style={{flex:1,overflowY:"auto",padding:"12px 16px",background:T.bg,display:"flex",flexDirection:"column",gap:"2px"}}>
-              {!messages.length&&<div style={{margin:"auto",textAlign:"center",color:T.textSec}}><div style={{fontSize:"40px",marginBottom:"10px"}}>{isSaved?"🔖":isSupport?"🆘":isOfficialBot?"✈️":"👋"}</div><div style={{fontSize:"14px"}}>{isSaved?"لا توجد رسائل محفوظة":isSupport?"ابدأ بكتابة مشكلتك وسيرد الذكاء الاصطناعي فوراً":"ابدأ المحادثة!"}</div></div>}
+              {!messages.length&&<div style={{margin:"auto",textAlign:"center",color:T.textSec}}><div style={{fontSize:"40px",marginBottom:"10px"}}>{isSaved?"🔖":isSupport?"🆘":isOfficialBot?"✈️":"👋"}</div><div style={{fontSize:"14px"}}>{isSaved?"لا توجد رسائل محفوظة":isSupport?"اكتب مشكلتك وسيرد الذكاء الاصطناعي فوراً":"ابدأ المحادثة!"}</div></div>}
               {messages.map((msg,idx)=>{
                 const isMe=msg.from===user?.uid;
                 const isSystem=msg.type==="system"||msg.type==="system_info";
                 const isOB=msg.isOfficialBot||msg.from===APP_BOT_ID||msg.from===BOT_FATHER_ID;
                 const isSup=msg.isSupport||msg.from===SUPPORT_ID;
                 const showSender=!isMe&&isGroup&&(idx===0||messages[idx-1]?.from!==msg.from);
-                if(isSystem) return <div key={msg.id} style={{textAlign:"center",margin:"6px 0"}}><span style={{background:`${T.accentBtn}20`,color:T.textSec,borderRadius:"12px",padding:"4px 14px",fontSize:"12px"}}>{msg.text}</span></div>;
+                const msgReactions=reactions[msg.id]||{};
+                if(isSystem) return <div key={msg.id} id={`msg_${msg.id}`} style={{textAlign:"center",margin:"6px 0"}}><span style={{background:`${T.accentBtn}20`,color:T.textSec,borderRadius:"12px",padding:"4px 14px",fontSize:"12px"}}>{msg.text}</span></div>;
                 return (
-                  <div key={msg.id} style={{display:"flex",justifyContent:isMe?"flex-start":"flex-end",marginBottom:"1px",animation:"msgIn 0.2s ease"}}
-                    onContextMenu={e=>{e.preventDefault();setCtxMenu({x:e.clientX,y:e.clientY,msg});}}>
-                    <div style={{maxWidth:"72%",padding:"8px 11px 5px",borderRadius:isMe?"16px 16px 16px 4px":"16px 16px 4px 16px",background:isMe?T.msgOut:isOB||isSup?"#1a3040":T.msgIn,boxShadow:"0 1px 3px rgba(0,0,0,0.3)"}}>
-                      {showSender&&<div style={{color:T.accentBtn,fontSize:"12px",fontWeight:"700",marginBottom:"3px"}}>{msg.senderName}</div>}
-                      {(isOB||isSup)&&!isMe&&<div style={{color:T.gold,fontSize:"11px",fontWeight:"700",marginBottom:"3px",display:"flex",alignItems:"center",gap:"4px"}}><Ic n="check" s={11} c={T.gold}/>⭐ {msg.senderName||"رسمي"}</div>}
-                      {msg.replyTo&&<div style={{background:"rgba(255,255,255,0.07)",borderRadius:"8px",padding:"5px 10px",marginBottom:"6px",borderRight:`3px solid ${T.accentBtn}`}}><div style={{color:T.accentBtn,fontSize:"11px",fontWeight:"700"}}>{msg.replyTo.sender}</div><div style={{color:T.textSec,fontSize:"12px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"200px"}}>{msg.replyTo.text}</div></div>}
-                      {msg.type==="image"&&<div style={{marginBottom:"4px"}}><img src={msg.imageUrl} alt="" style={{maxWidth:"240px",maxHeight:"280px",borderRadius:"10px",display:"block",width:"100%",objectFit:"cover"}}/>{msg.text&&<div style={{color:T.text,fontSize:"14px",marginTop:"5px"}}>{msg.text}</div>}</div>}
-                      {msg.type==="file"&&<a href={msg.fileData} download={msg.fileName} style={{display:"flex",alignItems:"center",gap:"10px",textDecoration:"none",background:"rgba(255,255,255,0.07)",borderRadius:"10px",padding:"10px 12px",marginBottom:"4px"}}><Ic n="file" s={26} c={T.accentBtn}/><div><div style={{color:T.text,fontSize:"13px",fontWeight:"600",wordBreak:"break-all"}}>{msg.fileName}</div><div style={{color:T.textSec,fontSize:"11px"}}>{fmtSize(msg.fileSize)}</div></div></a>}
-                      {(msg.type==="text"||!msg.type)&&<div style={{color:T.text,fontSize:"14.5px",lineHeight:"1.55",wordBreak:"break-word",whiteSpace:"pre-wrap"}}>{msg.text}</div>}
-                      <div style={{display:"flex",justifyContent:"flex-start",alignItems:"center",gap:"3px",marginTop:"3px"}}><span style={{color:T.textSec,fontSize:"10.5px"}}>{msg.time}</span>{isMe&&<Ic n="checks" s={13} c={T.accentBtn}/>}</div>
+                  <div key={msg.id} id={`msg_${msg.id}`} style={{display:"flex",justifyContent:isMe?"flex-start":"flex-end",marginBottom:"2px",animation:"msgIn 0.2s ease"}}
+                    onContextMenu={e=>{e.preventDefault();e.stopPropagation();setCtxMenu({x:Math.min(e.clientX,window.innerWidth-200),y:Math.min(e.clientY,window.innerHeight-300),msg});}}>
+                    {/* Sender avatar for groups */}
+                    {!isMe&&isGroup&&showSender&&(
+                      <div style={{flexShrink:0,marginLeft:"6px",marginTop:"auto"}}>
+                        <Av name={msg.senderName} color={msg.senderColor||rColor(msg.senderName)} size={28} photo={msg.senderPhoto} onClick={()=>{const u2=cachedUsers.find(u=>u.uid===msg.from);if(u2)setProfileViewer(u2);}}/>
+                      </div>
+                    )}
+                    <div style={{maxWidth:"72%"}}>
+                      <div style={{padding:"8px 11px 5px",borderRadius:isMe?"16px 16px 16px 4px":"16px 16px 4px 16px",background:isMe?T.msgOut:isOB||isSup?"#1a3040":T.msgIn,boxShadow:"0 1px 3px rgba(0,0,0,0.3)"}}>
+                        {showSender&&<div style={{color:msg.senderColor||T.accentBtn,fontSize:"12px",fontWeight:"700",marginBottom:"3px",cursor:"pointer"}} onClick={()=>{const u2=cachedUsers.find(u=>u.uid===msg.from);if(u2)setProfileViewer(u2);}}>{msg.senderName}</div>}
+                        {(isOB||isSup)&&!isMe&&<div style={{color:T.gold,fontSize:"11px",fontWeight:"700",marginBottom:"3px",display:"flex",alignItems:"center",gap:"4px"}}><Ic n="check" s={11} c={T.gold}/>⭐ {msg.senderName}</div>}
+                        {msg.replyTo&&<div style={{background:"rgba(255,255,255,0.07)",borderRadius:"8px",padding:"5px 10px",marginBottom:"6px",borderRight:`3px solid ${T.accentBtn}`}}><div style={{color:T.accentBtn,fontSize:"11px",fontWeight:"700"}}>{msg.replyTo.sender}</div><div style={{color:T.textSec,fontSize:"12px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"200px"}}>{msg.replyTo.text}</div></div>}
+                        {msg.type==="image"&&<div style={{marginBottom:"4px"}}><img src={msg.imageUrl} alt="" style={{maxWidth:"240px",maxHeight:"280px",borderRadius:"10px",display:"block",width:"100%",objectFit:"cover"}}/>{msg.text&&<ParsedText text={msg.text} onMentionClick={openMentionProfile} style={{color:T.text,fontSize:"14px",display:"block",marginTop:"5px"}}/>}</div>}
+                        {msg.type==="file"&&<a href={msg.fileData} download={msg.fileName} style={{display:"flex",alignItems:"center",gap:"10px",textDecoration:"none",background:"rgba(255,255,255,0.07)",borderRadius:"10px",padding:"10px 12px",marginBottom:"4px"}}><Ic n="file" s={26} c={T.accentBtn}/><div><div style={{color:T.text,fontSize:"13px",fontWeight:"600",wordBreak:"break-all"}}>{msg.fileName}</div><div style={{color:T.textSec,fontSize:"11px"}}>{fmtSize(msg.fileSize)}</div></div></a>}
+                        {(msg.type==="text"||!msg.type)&&<ParsedText text={msg.text} onMentionClick={openMentionProfile} style={{color:T.text,fontSize:"14.5px",lineHeight:"1.55",wordBreak:"break-word",whiteSpace:"pre-wrap",display:"block"}}/>}
+                        <div style={{display:"flex",justifyContent:"flex-start",alignItems:"center",gap:"4px",marginTop:"3px"}}>
+                          <span style={{color:T.textSec,fontSize:"10.5px"}}>{msg.time}{msg.edited&&" (معدّل)"}</span>
+                          {isMe&&<Ic n="checks" s={13} c={T.accentBtn}/>}
+                          {msg.pinned&&<Ic n="pin" s={11} c={T.gold}/>}
+                        </div>
+                      </div>
+                      {/* Reactions */}
+                      {Object.keys(msgReactions).length>0&&(
+                        <div style={{display:"flex",flexWrap:"wrap",gap:"4px",marginTop:"4px",justifyContent:isMe?"flex-start":"flex-end"}}>
+                          {Object.entries(msgReactions).map(([emoji,users])=>{
+                            const count=Object.keys(users).length;
+                            const iReacted=users[user?.uid];
+                            return count>0?(
+                              <button key={emoji} onClick={()=>addReaction(msg.id,emoji)} style={{background:iReacted?`${T.accentBtn}30`:"rgba(255,255,255,0.08)",border:`1px solid ${iReacted?T.accentBtn:"rgba(255,255,255,0.12)"}`,borderRadius:"12px",padding:"3px 8px",cursor:"pointer",fontSize:"13px",color:T.text,display:"flex",alignItems:"center",gap:"4px"}}>
+                                {emoji} <span style={{fontSize:"11px",color:iReacted?T.accentBtn:T.textSec}}>{count}</span>
+                              </button>
+                            ):null;
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -964,10 +1260,10 @@ export default function App() {
               <div ref={endRef}/>
             </div>
 
-            {/* Support escalate button */}
+            {/* Support escalate */}
             {isSupport&&(
               <div style={{padding:"8px 14px",background:T.panel,borderTop:`1px solid ${T.border}`,display:"flex",justifyContent:"center"}}>
-                <button onClick={escalateToHuman} style={{background:`${"#4CAF50"}15`,border:`1px solid ${"#4CAF50"}40`,borderRadius:"10px",padding:"8px 20px",color:"#4CAF50",cursor:"pointer",fontFamily:"inherit",fontSize:"13px",fontWeight:"700"}}>
+                <button onClick={escalateToHuman} style={{background:"rgba(77,214,122,0.15)",border:"1px solid rgba(77,214,122,0.4)",borderRadius:"10px",padding:"8px 20px",color:"#4dd67a",cursor:"pointer",fontFamily:"inherit",fontSize:"13px",fontWeight:"700"}}>
                   📞 التحويل للدعم البشري
                 </button>
               </div>
@@ -993,9 +1289,9 @@ export default function App() {
                 <div style={{display:"flex",alignItems:"center",gap:"6px"}}>
                   <button onClick={e=>{e.stopPropagation();setShowEmoji(!showEmoji);setAttachMenu(false);}} style={{background:"none",border:"none",cursor:"pointer",padding:"6px",borderRadius:"50%",fontSize:"20px",flexShrink:0}}>😊</button>
                   {!isSaved&&!isOfficialBot&&<button onClick={e=>{e.stopPropagation();setAttachMenu(!attachMenu);setShowEmoji(false);}} style={{background:"none",border:"none",cursor:"pointer",padding:"7px",borderRadius:"50%",display:"flex",flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.background=T.hover} onMouseLeave={e=>e.currentTarget.style.background="none"}><Ic n="attach" s={20}/></button>}
-                  <div style={{flex:1,background:T.inputBg,borderRadius:"22px",padding:"8px 14px"}}>
-                    <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage();}}}
-                      placeholder={isSaved?"احفظ ملاحظاتك...":isChannel?"نشر في القناة...":isSupport?"اكتب مشكلتك...":isOfficialBot?"أرسل أمراً...":"اكتب رسالة..."} rows={1}
+                  <div style={{flex:1,background:T.inputBg,borderRadius:"22px",padding:"8px 14px",border:editingMsg?`1px solid ${T.gold}`:"none"}}>
+                    <textarea ref={inputRef} value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage();}if(e.key==="Escape"){setEditingMsg(null);setReplyTo(null);setInput("");}}}
+                      placeholder={isSaved?"احفظ ملاحظاتك...":isChannel?"نشر في القناة...":isSupport?"اكتب مشكلتك...":isOfficialBot?"أرسل أمراً...":editingMsg?"تعديل الرسالة...":"اكتب رسالة..."} rows={1}
                       style={{background:"none",border:"none",outline:"none",color:T.text,fontSize:"14.5px",width:"100%",direction:"rtl",fontFamily:"inherit",resize:"none",lineHeight:"1.5",maxHeight:"90px",overflowY:"auto"}}/>
                   </div>
                   <button onClick={()=>input.trim()&&sendMessage()} style={{background:input.trim()?T.accentBtn:T.inputBg,border:"none",borderRadius:"50%",width:"42px",height:"42px",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,transition:"all 0.2s",boxShadow:input.trim()?"0 4px 12px rgba(82,136,193,0.4)":"none"}}>
@@ -1014,14 +1310,15 @@ export default function App() {
 
       {/* Context Menu */}
       {ctxMenu&&(
-        <div style={{position:"fixed",top:Math.min(ctxMenu.y,window.innerHeight-160),left:Math.min(ctxMenu.x,window.innerWidth-180),background:"#1c2d3d",borderRadius:"11px",padding:"5px 0",boxShadow:"0 8px 28px rgba(0,0,0,0.55)",zIndex:600,minWidth:"160px",border:`1px solid ${T.border}`}} onClick={e=>e.stopPropagation()}>
-          {[
-            {l:"↩ ردّ",a:()=>{setReplyTo(ctxMenu.msg);setCtxMenu(null);}},
-            {l:"⎘ نسخ",a:()=>{navigator.clipboard?.writeText(ctxMenu.msg?.text||"");setCtxMenu(null);}},
-            {l:"🔖 حفظ",a:async()=>{const s=chats.find(c=>c.type==="saved");if(s){const id=uidGen();await set(ref(db,`messages/${s.chatId||s.id}/${id}`),{...ctxMenu.msg,id,chatId:s.chatId||s.id,createdAt:Date.now()+1});}setCtxMenu(null);}},
-            ...(ctxMenu.msg?.from===user?.uid?[{l:"🗑 حذف",a:async()=>{if(activeChat)await remove(ref(db,`messages/${activeChat}/${ctxMenu.msg.id}`));setCtxMenu(null);},d:true}]:[]),
-          ].map(item=>(
-            <button key={item.l} onClick={item.a} style={{display:"block",width:"100%",padding:"10px 16px",background:"none",border:"none",color:item.d?T.danger:T.text,textAlign:"right",cursor:"pointer",fontFamily:"inherit",fontSize:"13.5px",transition:"background 0.15s"}}
+        <div style={{position:"fixed",top:ctxMenu.y,left:ctxMenu.x,background:"#1c2d3d",borderRadius:"13px",padding:"5px 0",boxShadow:"0 8px 28px rgba(0,0,0,0.55)",zIndex:600,minWidth:"180px",border:`1px solid ${T.border}`,maxHeight:"400px",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+          {/* Quick reactions */}
+          <div style={{display:"flex",gap:"4px",padding:"8px 10px",borderBottom:`1px solid ${T.border}20`}}>
+            {REACT_EMOJIS.map(e=>(
+              <button key={e} onClick={()=>addReaction(ctxMenu.msg?.id,e)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"20px",padding:"3px 4px",borderRadius:"8px"}} onMouseEnter={ev=>ev.currentTarget.style.background=T.hover} onMouseLeave={ev=>ev.currentTarget.style.background="none"}>{e}</button>
+            ))}
+          </div>
+          {ctxActions.map(item=>(
+            <button key={item.l} onClick={item.a} style={{display:"block",width:"100%",padding:"10px 16px",background:"none",border:"none",color:item.danger?T.danger:T.text,textAlign:"right",cursor:"pointer",fontFamily:"inherit",fontSize:"13.5px"}}
               onMouseEnter={e=>e.currentTarget.style.background=T.hover} onMouseLeave={e=>e.currentTarget.style.background="none"}>{item.l}</button>
           ))}
         </div>
@@ -1032,7 +1329,7 @@ export default function App() {
         <div style={{position:"fixed",inset:0,zIndex:500}} onClick={()=>setModal(null)}>
           <div style={{position:"absolute",bottom:"80px",left:"20px",background:"#1c2d3d",borderRadius:"14px",padding:"8px 0",boxShadow:"0 8px 32px rgba(0,0,0,0.5)",border:`1px solid ${T.border}`,minWidth:"200px"}} onClick={e=>e.stopPropagation()}>
             {[{ic:"user",l:"محادثة جديدة",a:()=>setModal("newChat")},{ic:"group",l:"مجموعة جديدة",a:()=>setModal("newGroup")},{ic:"channel",l:"قناة جديدة",a:()=>setModal("newChannel")},{ic:"bot",l:"BotFather",a:openBotFather}].map(item=>(
-              <button key={item.l} onClick={item.a} style={{display:"flex",alignItems:"center",gap:"12px",width:"100%",padding:"12px 16px",background:"none",border:"none",color:T.text,cursor:"pointer",fontFamily:"inherit",fontSize:"14px",transition:"background 0.15s"}}
+              <button key={item.l} onClick={item.a} style={{display:"flex",alignItems:"center",gap:"12px",width:"100%",padding:"12px 16px",background:"none",border:"none",color:T.text,cursor:"pointer",fontFamily:"inherit",fontSize:"14px"}}
                 onMouseEnter={e=>e.currentTarget.style.background=T.hover} onMouseLeave={e=>e.currentTarget.style.background="none"}>
                 <Ic n={item.ic} s={18} c={T.accentBtn}/>{item.l}
               </button>
@@ -1044,7 +1341,6 @@ export default function App() {
       {/* MODALS */}
       {modal==="newChat"&&(
         <Modal title="محادثة جديدة" onClose={()=>setModal(null)}>
-          <div style={{color:T.textSec,fontSize:"13px",marginBottom:"12px"}}>ابحث عن مستخدم:</div>
           <input value={search} onChange={e=>{setSearch(e.target.value);setSearchMode(true);}} placeholder="@username أو الاسم" autoFocus
             style={{background:T.inputBg,border:`1px solid ${T.border}`,borderRadius:"12px",padding:"11px 14px",color:T.text,fontSize:"15px",outline:"none",direction:"rtl",fontFamily:"inherit",width:"100%",marginBottom:"12px",boxSizing:"border-box"}}/>
           <div style={{maxHeight:"300px",overflowY:"auto"}}>
@@ -1060,24 +1356,13 @@ export default function App() {
         </Modal>
       )}
 
-      {modal==="newGroup"&&(
-        <Modal title="مجموعة جديدة" onClose={()=>setModal(null)}>
+      {(modal==="newGroup"||modal==="newChannel")&&(
+        <Modal title={modal==="newGroup"?"مجموعة جديدة":"قناة جديدة"} onClose={()=>setModal(null)}>
           <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
-            <FInput label="اسم المجموعة" value={newForm.name} onChange={e=>setNewForm(p=>({...p,name:e.target.value}))} placeholder="اسم المجموعة..." autoFocus/>
-            <FInput label="اسم المستخدم (5 أحرف على الأقل)" value={newForm.username} onChange={e=>setNewForm(p=>({...p,username:e.target.value}))} placeholder="group_name"/>
-            <FInput label="النبذة (اختياري)" value={newForm.bio} onChange={e=>setNewForm(p=>({...p,bio:e.target.value}))} placeholder="وصف المجموعة..."/>
-            <PBtn onClick={()=>createConvo("group")}>إنشاء المجموعة</PBtn>
-          </div>
-        </Modal>
-      )}
-
-      {modal==="newChannel"&&(
-        <Modal title="قناة جديدة" onClose={()=>setModal(null)}>
-          <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
-            <FInput label="اسم القناة" value={newForm.name} onChange={e=>setNewForm(p=>({...p,name:e.target.value}))} placeholder="اسم القناة..." autoFocus/>
-            <FInput label="اسم المستخدم (5 أحرف على الأقل)" value={newForm.username} onChange={e=>setNewForm(p=>({...p,username:e.target.value}))} placeholder="channel_name"/>
-            <FInput label="النبذة (اختياري)" value={newForm.bio} onChange={e=>setNewForm(p=>({...p,bio:e.target.value}))} placeholder="وصف القناة..."/>
-            <PBtn onClick={()=>createConvo("channel")}>إنشاء القناة</PBtn>
+            <FInput label={modal==="newGroup"?"اسم المجموعة":"اسم القناة"} value={newForm.name} onChange={e=>setNewForm(p=>({...p,name:e.target.value}))} placeholder={modal==="newGroup"?"اسم المجموعة...":"اسم القناة..."} autoFocus/>
+            <FInput label="اسم المستخدم (يبدأ بحرف، 5+ أحرف) *مطلوب*" value={newForm.username} onChange={e=>setNewForm(p=>({...p,username:e.target.value}))} placeholder={modal==="newGroup"?"group_name":"channel_name"}/>
+            <FInput label="النبذة (اختياري)" value={newForm.bio} onChange={e=>setNewForm(p=>({...p,bio:e.target.value}))} placeholder="وصف..."/>
+            <PBtn onClick={()=>createConvo(modal==="newGroup"?"group":"channel")}>{modal==="newGroup"?"إنشاء المجموعة":"إنشاء القناة"}</PBtn>
           </div>
         </Modal>
       )}
@@ -1107,6 +1392,7 @@ export default function App() {
                 <Av name={channelSettings.name} color={rColor(channelSettings.name)} size={72} photo={channelSettings.photoURL}/>
                 <div style={{position:"absolute",bottom:0,right:0,background:T.accentBtn,borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px"}}>📷</div>
               </div>
+              <span style={{color:T.textSec,fontSize:"12px"}}>اضغط لتغيير الصورة (رفع من الهاتف)</span>
             </div>
             <FInput label="اسم القناة" value={channelSettings.name} onChange={e=>setChannelSettings(p=>({...p,name:e.target.value}))} placeholder="اسم القناة..."/>
             <FInput label="اسم المستخدم (@)" value={channelSettings.username||""} onChange={e=>setChannelSettings(p=>({...p,username:e.target.value}))} placeholder="channel_username"/>
@@ -1146,8 +1432,7 @@ export default function App() {
         <Modal title="تغيير كلمة المرور" onClose={()=>setModal(null)}>
           <div style={{textAlign:"center",padding:"20px",color:T.textSec,fontSize:"14px",lineHeight:"1.7"}}>
             <div style={{fontSize:"40px",marginBottom:"12px"}}>🔑</div>
-            سيتم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك:<br/>
-            <strong style={{color:T.text}}>{user?.email}</strong>
+            سيتم إرسال رابط إعادة التعيين إلى:<br/><strong style={{color:T.text}}>{user?.email}</strong>
           </div>
           <PBtn onClick={async()=>{const {sendPasswordResetEmail}=await import("firebase/auth");await sendPasswordResetEmail(auth,user?.email);alert("تم الإرسال! تحقق من بريدك.");setModal(null);}}>
             📧 إرسال رابط إعادة التعيين
@@ -1167,4 +1452,3 @@ export default function App() {
     </div>
   );
 }
-
