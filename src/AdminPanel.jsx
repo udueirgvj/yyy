@@ -540,6 +540,151 @@ function BotsManager({db}) {
   );
 }
 
+
+// ── Boost Manager ──
+function BoostManager({db}) {
+  const [chUsername,setChUsername]=useState("");
+  const [boostCount,setBoostCount]=useState("");
+  const [targetMsg,setTargetMsg]=useState("");
+  const [selEmoji,setSelEmoji]=useState("❤️");
+  const [rxCount,setRxCount]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [msg,setMsg]=useState("");
+
+  const EMOJIS=["❤️","👍","🔥","😂","🎉","😮","👎","⭐"];
+
+  const boostSubs=async()=>{
+    if(!chUsername.trim()||!boostCount){alert("أدخل اسم القناة والعدد");return;}
+    setLoading(true);setMsg("");
+    try {
+      const snap=await get(ref(db,"chatUsernames/"+chUsername.toLowerCase().replace("@","")));
+      if(!snap.exists()){setMsg("❌ لا توجد قناة @"+chUsername);setLoading(false);return;}
+      const chatId=snap.val();
+      const cs=await get(ref(db,"chats/"+chatId));
+      if(!cs.exists()){setMsg("❌ القناة غير موجودة");setLoading(false);return;}
+      const current=cs.val().subscribers||0;
+      const newCount=current+parseInt(boostCount);
+      await update(ref(db,"chats/"+chatId),{subscribers:newCount});
+      setMsg("✅ تم رشق "+boostCount+" مشترك → الإجمالي: "+newCount);
+    } catch(e){setMsg("❌ خطأ: "+e.message);}
+    setLoading(false);
+  };
+
+  const boostReaction=async()=>{
+    if(!targetMsg.trim()||!rxCount){alert("أدخل معرف الرسالة والعدد");return;}
+    setLoading(true);setMsg("");
+    try {
+      // Parse Termin/channelname/msgId format
+      const parts=targetMsg.trim().split("/");
+      const msgId=parts[parts.length-1];
+      const channelName=parts[parts.length-2];
+      if(!msgId||!channelName){setMsg("❌ صيغة غير صحيحة. مثال: Termin/termeen/msg123");setLoading(false);return;}
+      const snap=await get(ref(db,"chatUsernames/"+channelName.toLowerCase()));
+      if(!snap.exists()){setMsg("❌ لا توجد قناة @"+channelName);setLoading(false);return;}
+      const chatId=snap.val();
+      const n=parseInt(rxCount);
+      const updates={};
+      for(let i=0;i<n;i++){
+        updates[`reactions/${chatId}/${msgId}/${selEmoji}/boost_${i}`]=true;
+      }
+      // Use update with multi-path
+      for(const [path,val] of Object.entries(updates)){
+        await set(ref(db,path),val).catch(()=>{});
+      }
+      setMsg("✅ تم رشق "+n+" تفاعل "+selEmoji+" على الرسالة");
+    } catch(e){setMsg("❌ خطأ: "+e.message);}
+    setLoading(false);
+  };
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+      {msg&&<div style={{padding:"12px 16px",borderRadius:"12px",background:msg.startsWith("✅")?`rgba(77,214,122,0.1)`:`rgba(224,92,92,0.1)`,border:`1px solid ${msg.startsWith("✅")?"rgba(77,214,122,0.3)":"rgba(224,92,92,0.3)"}`,color:msg.startsWith("✅")?"#4dd67a":"#e05c5c",fontSize:"13px",fontWeight:"600"}}>{msg}</div>}
+      
+      {/* Boost Subscribers */}
+      <div style={{background:"rgba(10,22,40,0.95)",borderRadius:"16px",padding:"18px",border:"1px solid rgba(255,215,0,0.08)"}}>
+        <div style={{color:"#ffd700",fontSize:"15px",fontWeight:"800",marginBottom:"14px"}}>📊 رشق مشتركين قناة</div>
+        <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+          <input value={chUsername} onChange={e=>setChUsername(e.target.value)} placeholder="@channel_username"
+            style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:"10px",padding:"10px 14px",color:"#fff",fontSize:"13px",outline:"none",direction:"ltr",fontFamily:"inherit",boxSizing:"border-box"}}/>
+          <input value={boostCount} onChange={e=>setBoostCount(e.target.value)} placeholder="عدد المشتركين (مثال: 1000)" type="number"
+            style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:"10px",padding:"10px 14px",color:"#fff",fontSize:"13px",outline:"none",direction:"rtl",fontFamily:"inherit",boxSizing:"border-box"}}/>
+          <button onClick={boostSubs} disabled={loading} style={{padding:"12px",background:"linear-gradient(135deg,#ffd700,#ff8c00)",border:"none",borderRadius:"10px",color:"#000",cursor:"pointer",fontFamily:"inherit",fontSize:"14px",fontWeight:"800"}}>
+            {loading?"⟳ جاري الرشق...":"🚀 رشق المشتركين"}
+          </button>
+        </div>
+      </div>
+
+      {/* Boost Reactions */}
+      <div style={{background:"rgba(10,22,40,0.95)",borderRadius:"16px",padding:"18px",border:"1px solid rgba(255,215,0,0.08)"}}>
+        <div style={{color:"#ffd700",fontSize:"15px",fontWeight:"800",marginBottom:"14px"}}>💬 رشق تفاعل على منشور</div>
+        <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+          <input value={targetMsg} onChange={e=>setTargetMsg(e.target.value)} placeholder="رابط المنشور: Termin/channel/msgId"
+            style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:"10px",padding:"10px 14px",color:"#fff",fontSize:"13px",outline:"none",direction:"ltr",fontFamily:"inherit",boxSizing:"border-box"}}/>
+          <div>
+            <div style={{color:"rgba(255,215,0,0.5)",fontSize:"11px",marginBottom:"6px"}}>اختر التفاعل:</div>
+            <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+              {EMOJIS.map(e=>(
+                <button key={e} onClick={()=>setSelEmoji(e)} style={{background:selEmoji===e?"rgba(255,215,0,0.2)":"rgba(255,255,255,0.05)",border:`2px solid ${selEmoji===e?"#ffd700":"rgba(255,255,255,0.1)"}`,borderRadius:"10px",padding:"8px 12px",cursor:"pointer",fontSize:"20px"}}>
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+          <input value={rxCount} onChange={e=>setRxCount(e.target.value)} placeholder="عدد التفاعلات (مثال: 500)" type="number"
+            style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:"10px",padding:"10px 14px",color:"#fff",fontSize:"13px",outline:"none",direction:"rtl",fontFamily:"inherit",boxSizing:"border-box"}}/>
+          <button onClick={boostReaction} disabled={loading} style={{padding:"12px",background:"linear-gradient(135deg,#5288c1,#2b5278)",border:"none",borderRadius:"10px",color:"#fff",cursor:"pointer",fontFamily:"inherit",fontSize:"14px",fontWeight:"800"}}>
+            {loading?"⟳ جاري الرشق...":"⚡ رشق التفاعل"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Reports Manager ──
+function ReportsManager({db}) {
+  const [reports,setReports]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    const r=ref(db,"reports");
+    const unsub=onValue(r,snap=>{
+      if(snap.exists()){
+        setReports(Object.values(snap.val()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)));
+      } else setReports([]);
+      setLoading(false);
+    });
+    return()=>off(r);
+  },[db]);
+
+  const resolve=async(rid)=>{
+    await update(ref(db,"reports/"+rid),{status:"resolved"});
+  };
+
+  if(loading) return <div style={{color:"#6b8ca4",textAlign:"center",padding:"40px"}}>⟳ جاري التحميل...</div>;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+      {reports.length===0&&<div style={{color:"#6b8ca4",textAlign:"center",padding:"50px"}}>لا توجد بلاغات</div>}
+      {reports.map(r=>(
+        <div key={r.id||r.createdAt} style={{background:"rgba(10,22,40,0.95)",borderRadius:"14px",padding:"14px",border:"1px solid rgba(255,215,0,0.08)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"8px"}}>
+            <div>
+              <div style={{color:"#e8f4fd",fontWeight:"700",fontSize:"14px"}}>🚩 {r.reason}</div>
+              <div style={{color:"#6b8ca4",fontSize:"12px",marginTop:"3px"}}>من: @{r.reporterUsername||"—"} · {r.createdAt?new Date(r.createdAt).toLocaleDateString("ar-SA"):""}</div>
+            </div>
+            <span style={{background:r.status==="resolved"?"rgba(77,214,122,0.15)":"rgba(240,160,64,0.15)",color:r.status==="resolved"?"#4dd67a":"#f0a040",fontSize:"11px",padding:"3px 10px",borderRadius:"8px",fontWeight:"700"}}>{r.status==="resolved"?"✅ تم الحل":"⏳ معلق"}</span>
+          </div>
+          {r.note&&<div style={{color:"#6b8ca4",fontSize:"13px",background:"rgba(255,255,255,0.04)",borderRadius:"8px",padding:"8px 10px",marginBottom:"8px"}}>{r.note}</div>}
+          {r.status!=="resolved"&&(
+            <button onClick={()=>resolve(r.id||r.createdAt?.toString())} style={{background:"rgba(77,214,122,0.15)",border:"1px solid rgba(77,214,122,0.3)",borderRadius:"8px",padding:"6px 14px",color:"#4dd67a",cursor:"pointer",fontFamily:"inherit",fontSize:"12px",fontWeight:"700"}}>✅ تم الحل</button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── MAIN ADMIN PANEL ──
 export default function AdminPanel() {
   const [adminUser,setAdminUser]=useState(null);
@@ -627,6 +772,8 @@ export default function AdminPanel() {
     {k:"verify",l:"✅ التوثيق",c:null},
     {k:"app_channel",l:"📡 قناة التطبيق",c:null},
     {k:"bots",l:"🤖 BotFather",c:null},
+    {k:"boost",l:"🚀 رشق",c:null},
+    {k:"reports",l:"🚩 البلاغات",c:null},
   ];
 
   return (
@@ -838,6 +985,22 @@ export default function AdminPanel() {
             </div>
           )}
 
+
+          {/* BOOST */}
+          {tab==="boost"&&(
+            <div>
+              <div style={{color:T.gold,fontSize:"17px",fontWeight:"800",marginBottom:"16px"}}>🚀 رشق المشتركين والتفاعل</div>
+              <BoostManager db={db}/>
+            </div>
+          )}
+
+          {/* REPORTS */}
+          {tab==="reports"&&(
+            <div>
+              <div style={{color:T.gold,fontSize:"17px",fontWeight:"800",marginBottom:"16px"}}>🚩 البلاغات</div>
+              <ReportsManager db={db}/>
+            </div>
+          )}
           {/* APP CHANNEL */}
           {tab==="app_channel"&&<AppChannelManager db={db}/>}
 
