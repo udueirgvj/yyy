@@ -541,6 +541,135 @@ function BotsManager({db}) {
 }
 
 
+
+// ── Stars Manager ──
+function StarsManager({db}) {
+  const [orders,setOrders]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    const r=ref(db,"starOrders");
+    const unsub=onValue(r,snap=>{
+      if(snap.exists()) setOrders(Object.values(snap.val()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)));
+      else setOrders([]);
+      setLoading(false);
+    });
+    return()=>off(r);
+  },[db]);
+
+  const approve=async(order)=>{
+    if(!window.confirm(`موافقة على إضافة ${order.stars} نجمة لـ @${order.username}؟`)) return;
+    // Add stars to user
+    const uSnap=await get(ref(db,"usernames/"+order.username));
+    if(uSnap.exists()){
+      const uid2=uSnap.val();
+      const uData=await get(ref(db,"users/"+uid2));
+      const currentStars=uData.exists()?uData.val().stars||0:0;
+      await update(ref(db,"users/"+uid2),{stars:currentStars+order.stars});
+      // Notify user
+      const botId="bot_"+uid2; const nid=uidGen();
+      await set(ref(db,"messages/"+botId+"/"+nid),{id:nid,chatId:botId,text:`✅ تم شحن حسابك!
+
+⭐ ${order.stars} نجمة تم إضافتها
+🔢 رقم الطلب: ${order.orderId}
+
+شكراً لثقتك بتيرمين! 🎉`,from:"bot_dfgfd_official",senderName:"DFGFD",time:new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"}),type:"text",isOfficialBot:true,createdAt:Date.now()});
+    }
+    await update(ref(db,"starOrders/"+order.orderId),{status:"approved"});
+    alert("✅ تم الموافقة وإضافة النجوم");
+  };
+
+  const reject=async(order)=>{
+    await update(ref(db,"starOrders/"+order.orderId),{status:"rejected"});
+    alert("❌ تم رفض الطلب");
+  };
+
+  if(loading) return <div style={{color:"#6b8ca4",textAlign:"center",padding:"40px"}}>⟳ جاري التحميل...</div>;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+      {orders.length===0&&<div style={{color:"#6b8ca4",textAlign:"center",padding:"50px"}}>لا توجد طلبات شحن</div>}
+      {orders.map(o=>(
+        <div key={o.orderId} style={{background:"rgba(10,22,40,0.95)",borderRadius:"14px",padding:"14px",border:"1px solid rgba(255,215,0,0.08)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"10px"}}>
+            <div>
+              <div style={{color:"#e8f4fd",fontWeight:"700",fontSize:"14px"}}>{o.stars} ⭐ بـ {o.price}</div>
+              <div style={{color:"#6b8ca4",fontSize:"12px",marginTop:"3px"}}>@{o.username} · {o.orderId}</div>
+              <div style={{color:"#6b8ca4",fontSize:"11px"}}>{o.createdAt?new Date(o.createdAt).toLocaleString("ar-SA"):""}</div>
+            </div>
+            <span style={{background:o.status==="approved"?"rgba(77,214,122,0.15)":o.status==="rejected"?"rgba(224,92,92,0.15)":"rgba(240,160,64,0.15)",color:o.status==="approved"?"#4dd67a":o.status==="rejected"?"#e05c5c":"#f0a040",fontSize:"11px",padding:"3px 10px",borderRadius:"8px",fontWeight:"700"}}>{o.status==="approved"?"✅ مُوافق":o.status==="rejected"?"❌ مرفوض":"⏳ معلق"}</span>
+          </div>
+          {o.status==="pending"&&(
+            <div style={{display:"flex",gap:"8px"}}>
+              <button onClick={()=>approve(o)} style={{flex:1,padding:"8px",background:"rgba(77,214,122,0.15)",border:"1px solid rgba(77,214,122,0.3)",borderRadius:"8px",color:"#4dd67a",cursor:"pointer",fontFamily:"inherit",fontSize:"13px",fontWeight:"700"}}>✅ موافقة</button>
+              <button onClick={()=>reject(o)} style={{flex:1,padding:"8px",background:"rgba(224,92,92,0.15)",border:"1px solid rgba(224,92,92,0.3)",borderRadius:"8px",color:"#e05c5c",cursor:"pointer",fontFamily:"inherit",fontSize:"13px",fontWeight:"700"}}>❌ رفض</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Phones Manager ──
+function PhonesManager({db}) {
+  const [searchUn,setSearchUn]=useState("");
+  const [foundUser,setFoundUser]=useState(null);
+  const [newPhone,setNewPhone]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [msg,setMsg]=useState("");
+
+  const search=async()=>{
+    if(!searchUn.trim()) return;
+    setLoading(true);setMsg(""); setFoundUser(null);
+    const snap=await get(ref(db,"usernames/"+searchUn.toLowerCase().replace("@","")));
+    if(snap.exists()){
+      const uid2=snap.val();
+      const uSnap=await get(ref(db,"users/"+uid2));
+      if(uSnap.exists()){setFoundUser(uSnap.val());setNewPhone(uSnap.val().phone||"");}
+      else setMsg("❌ لا يوجد مستخدم");
+    } else setMsg("❌ لا يوجد مستخدم @"+searchUn);
+    setLoading(false);
+  };
+
+  const savePhone=async()=>{
+    if(!foundUser||!newPhone.trim()) return;
+    setLoading(true);
+    await update(ref(db,"users/"+foundUser.uid),{phone:newPhone.trim()});
+    setMsg("✅ تم تحديث الرقم إلى: "+newPhone);
+    setLoading(false);
+  };
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+      <div style={{background:"rgba(10,22,40,0.95)",borderRadius:"16px",padding:"18px",border:"1px solid rgba(255,215,0,0.08)"}}>
+        <div style={{color:"#ffd700",fontSize:"15px",fontWeight:"800",marginBottom:"14px"}}>📞 بحث وتعديل رقم حساب</div>
+        <div style={{display:"flex",gap:"10px",marginBottom:"12px"}}>
+          <input value={searchUn} onChange={e=>setSearchUn(e.target.value)} placeholder="@username" onKeyDown={e=>e.key==="Enter"&&search()}
+            style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:"10px",padding:"10px 14px",color:"#fff",fontSize:"13px",outline:"none",direction:"ltr",fontFamily:"inherit"}}/>
+          <button onClick={search} disabled={loading} style={{padding:"10px 18px",background:"linear-gradient(135deg,#ffd700,#ff8c00)",border:"none",borderRadius:"10px",color:"#000",cursor:"pointer",fontFamily:"inherit",fontWeight:"700"}}>
+            {loading?"⟳":"بحث"}
+          </button>
+        </div>
+        {msg&&<div style={{padding:"10px",borderRadius:"8px",background:msg.startsWith("✅")?"rgba(77,214,122,0.1)":"rgba(224,92,92,0.1)",color:msg.startsWith("✅")?"#4dd67a":"#e05c5c",fontSize:"13px",marginBottom:"10px"}}>{msg}</div>}
+        {foundUser&&(
+          <div>
+            <div style={{color:"#e8f4fd",marginBottom:"12px"}}>
+              <div style={{fontWeight:"700"}}>@{foundUser.username} — {foundUser.displayName}</div>
+              <div style={{color:"#6b8ca4",fontSize:"12px"}}>الرقم الحالي: {foundUser.phone||"لا يوجد"}</div>
+            </div>
+            <div style={{display:"flex",gap:"10px"}}>
+              <input value={newPhone} onChange={e=>setNewPhone(e.target.value)} placeholder="+666XXXXXXXX"
+                style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:"10px",padding:"10px 14px",color:"#fff",fontSize:"13px",outline:"none",direction:"ltr",fontFamily:"inherit"}}/>
+              <button onClick={savePhone} disabled={loading} style={{padding:"10px 18px",background:"rgba(77,214,122,0.2)",border:"1px solid rgba(77,214,122,0.4)",borderRadius:"10px",color:"#4dd67a",cursor:"pointer",fontFamily:"inherit",fontWeight:"700"}}>حفظ</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Boost Manager ──
 function BoostManager({db}) {
   const [chUsername,setChUsername]=useState("");
@@ -774,6 +903,8 @@ export default function AdminPanel() {
     {k:"bots",l:"🤖 BotFather",c:null},
     {k:"boost",l:"🚀 رشق",c:null},
     {k:"reports",l:"🚩 البلاغات",c:null},
+    {k:"stars",l:"⭐ الشحن",c:null},
+    {k:"phones",l:"📞 الأرقام",c:null},
   ];
 
   return (
@@ -999,6 +1130,22 @@ export default function AdminPanel() {
             <div>
               <div style={{color:T.gold,fontSize:"17px",fontWeight:"800",marginBottom:"16px"}}>🚩 البلاغات</div>
               <ReportsManager db={db}/>
+            </div>
+          )}
+
+          {/* STARS ORDERS */}
+          {tab==="stars"&&(
+            <div>
+              <div style={{color:T.gold,fontSize:"17px",fontWeight:"800",marginBottom:"16px"}}>⭐ طلبات شحن النجوم</div>
+              <StarsManager db={db}/>
+            </div>
+          )}
+
+          {/* PHONES */}
+          {tab==="phones"&&(
+            <div>
+              <div style={{color:T.gold,fontSize:"17px",fontWeight:"800",marginBottom:"16px"}}>📞 تعديل أرقام الحسابات</div>
+              <PhonesManager db={db}/>
             </div>
           )}
           {/* APP CHANNEL */}
