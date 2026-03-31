@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "firebase/auth";
@@ -159,37 +158,152 @@ function MText({text,onMention,style}) {
   return <span style={style}>{parts.map((p,i)=>/^@[a-zA-Z][a-zA-Z0-9_]{3,}$/.test(p)?<span key={i} onClick={e=>{e.stopPropagation();onMention&&onMention(p.slice(1));}} style={{color:"#6ab3f3",cursor:"pointer",fontWeight:"600"}}>{p}</span>:<span key={i}>{p}</span>)}</span>;
 }
 
-// Profile sheet — Telegram style
-function ProfSheet({p,onClose,onChat,me,chats,onlineUsers}) {
+// Profile sheet — EXACT Telegram style
+function ProfSheet({p,onClose,onChat,me,chats,onlineUsers,channelGifts}) {
   if(!p) return null;
   const isUser=!!p.uid&&p.type!=="channel"&&p.type!=="group";
+  const isCH=p.type==="channel";
+  const isGR=p.type==="group";
   const mutual=isUser?chats.filter(c=>c.type==="group"&&Array.isArray(c.members)&&c.members.includes(p.uid)&&c.members.includes(me?.uid)):[];
-  const isOnline=p.uid&&onlineUsers&&onlineUsers[p.uid];
+  const isOnline=isUser&&onlineUsers&&onlineUsers[p.uid]?.online===true;
   const lastSeen=p.lastSeen?new Date(p.lastSeen):null;
   const showPhone=p.showPhone!==false&&p.phone;
+  const pName=p.name||p.displayName||"؟";
+  const bgColor=p.color||rc(pName);
+
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
-      <div style={{background:T.sb,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:"480px",maxHeight:"88vh",overflow:"hidden",display:"flex",flexDirection:"column"}} onClick={e=>e.stopPropagation()}>
-        <div style={{position:"relative",height:"230px",background:p.photoURL?"transparent":(p.color||rc(p.name||p.displayName||"?")),overflow:"hidden",flexShrink:0}}>
-          {p.photoURL?<img src={p.photoURL} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"90px",fontWeight:"900",color:"rgba(255,255,255,0.7)"}}>{(p.name||p.displayName||"?").charAt(0).toUpperCase()}</div>}
-          <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(transparent,rgba(0,0,0,0.8))",padding:"24px 16px 14px"}}>
-            <div style={{color:"#fff",fontSize:"21px",fontWeight:"900",display:"flex",alignItems:"center",gap:"8px"}}>
-              {p.name||p.displayName}
-              {(p.verified||p.isOfficial)&&<Vbg sz={20}/>}
-            </div>
-            {p.username&&<div style={{color:"rgba(255,255,255,0.7)",fontSize:"13px"}}>@{p.username}</div>}
-            {isUser&&<div style={{color:isOnline?"#4dd67a":"rgba(255,255,255,0.5)",fontSize:"12px",marginTop:"2px"}}>{isOnline?"متصل الآن":lastSeen?`آخر ظهور: ${lastSeen.toLocaleDateString("ar-SA")} ${lastSeen.toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"})}`:"غير متصل"}</div>}
-          </div>
-          <button onClick={onClose} style={{position:"absolute",top:"12px",right:"12px",background:"rgba(0,0,0,0.4)",border:"none",borderRadius:"50%",width:"34px",height:"34px",color:"#fff",cursor:"pointer",fontSize:"17px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0)",zIndex:500,display:"flex",alignItems:"stretch",justifyContent:"flex-end"}} onClick={onClose}>
+      <div style={{background:"#fff",width:"100%",maxWidth:"100vw",height:"100%",overflow:"hidden",display:"flex",flexDirection:"column",animation:"slideIn .2s ease"}} onClick={e=>e.stopPropagation()}>
+        {/* Top bar */}
+        <div style={{display:"flex",alignItems:"center",padding:"12px 16px",background:"#fff",borderBottom:"1px solid #f0f0f0",flexShrink:0}}>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",padding:"6px",marginLeft:"8px",display:"flex",alignItems:"center"}}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M15 18L9 12L15 6" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          <span style={{color:"#000",fontWeight:"700",fontSize:"18px",flex:1}}></span>
+          <button style={{background:"none",border:"none",cursor:"pointer",padding:"6px"}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="#333"/><circle cx="12" cy="12" r="1.5" fill="#333"/><circle cx="12" cy="19" r="1.5" fill="#333"/></svg>
+          </button>
         </div>
-        <div style={{overflowY:"auto",flex:1,padding:"14px 16px",display:"flex",flexDirection:"column",gap:"10px"}}>
-          {(p.bio)&&<div style={{background:T.panel,borderRadius:"12px",padding:"12px"}}><div style={{color:T.dim,fontSize:"11px",marginBottom:"4px"}}>النبذة</div><div style={{color:T.text,fontSize:"14px",lineHeight:"1.5"}}>{p.bio}</div></div>}
-          {p.username&&<div style={{background:T.panel,borderRadius:"12px",padding:"12px"}}><div style={{color:T.dim,fontSize:"11px",marginBottom:"4px"}}>اسم المستخدم</div><div style={{color:T.btn,fontSize:"14px",fontWeight:"600"}}>@{p.username}</div></div>}
-          {showPhone&&<div style={{background:T.panel,borderRadius:"12px",padding:"12px"}}><div style={{color:T.dim,fontSize:"11px",marginBottom:"4px"}}>رقم الهاتف</div><div style={{color:T.text,fontSize:"14px",fontWeight:"600",direction:"ltr",textAlign:"right"}}>{p.phone}</div></div>}
-          {p.type==="channel"&&<div style={{background:T.panel,borderRadius:"12px",padding:"12px"}}><div style={{color:T.dim,fontSize:"11px",marginBottom:"4px"}}>المشتركون</div><div style={{color:T.text,fontSize:"14px",fontWeight:"700"}}>{fsub(p.subscribers||0)}</div></div>}
-          {mutual.length>0&&<div style={{background:T.panel,borderRadius:"12px",padding:"12px"}}><div style={{color:T.dim,fontSize:"11px",marginBottom:"8px"}}>مجموعات مشتركة ({mutual.length})</div>{mutual.slice(0,3).map(g=><div key={g.id} style={{display:"flex",alignItems:"center",gap:"8px",padding:"4px 0"}}><Av name={g.name} size={30}/><div style={{color:T.text,fontSize:"13px"}}>{g.name}</div></div>)}</div>}
-          {isUser&&p.uid!==me?.uid&&onChat&&<button onClick={()=>{onChat(p);onClose();}} style={{padding:"13px",background:T.btn,border:"none",borderRadius:"12px",color:"#fff",fontWeight:"700",fontSize:"15px",cursor:"pointer",fontFamily:"inherit"}}>💬 إرسال رسالة</button>}
-          {(p.type==="channel"||p.type==="group")&&onChat&&<button onClick={()=>{onChat(p);onClose();}} style={{padding:"13px",background:T.btn,border:"none",borderRadius:"12px",color:"#fff",fontWeight:"700",fontSize:"15px",cursor:"pointer",fontFamily:"inherit"}}>👁 فتح {p.type==="channel"?"القناة":"المجموعة"}</button>}
+
+        <div style={{overflowY:"auto",flex:1,background:"#f5f5f5"}}>
+          {/* Profile hero - white card */}
+          <div style={{background:"#fff",padding:"24px 16px 16px",display:"flex",flexDirection:"column",alignItems:"center",gap:"10px",marginBottom:"8px"}}>
+            {/* Avatar */}
+            <div style={{width:"100px",height:"100px",borderRadius:"50%",background:p.photoURL?"transparent":bgColor,display:"flex",alignItems:"center",justifyContent:"center",fontSize:"44px",fontWeight:"900",color:"#fff",overflow:"hidden",flexShrink:0}}>
+              {p.photoURL?<img src={p.photoURL} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:pName.charAt(0).toUpperCase()}
+            </div>
+            {/* Name */}
+            <div style={{textAlign:"center"}}>
+              <div style={{color:"#000",fontSize:"22px",fontWeight:"800",display:"flex",alignItems:"center",gap:"6px",justifyContent:"center"}}>
+                {pName}
+                {(p.verified||p.isOfficial)&&<span style={{background:"#2AABEE",borderRadius:"50%",width:"22px",height:"22px",display:"inline-flex",alignItems:"center",justifyContent:"center"}}><svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg></span>}
+              </div>
+              {/* Online/last seen */}
+              {isUser&&<div style={{color:isOnline?"#4CAF50":"#999",fontSize:"14px",marginTop:"3px"}}>{isOnline?"متصل الآن":lastSeen?`آخر ظهور يوم ${lastSeen.toLocaleDateString("ar-SA")} عند ${lastSeen.toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"})} م`:"غير متصل"}</div>}
+              {isCH&&<div style={{color:"#999",fontSize:"14px",marginTop:"3px"}}>{fsub(p.subscribers||0)} مشترك</div>}
+              {isGR&&<div style={{color:"#999",fontSize:"14px",marginTop:"3px"}}>{(p.members||[]).length} عضو</div>}
+            </div>
+            {/* Action buttons */}
+            <div style={{display:"flex",gap:"8px",width:"100%",maxWidth:"340px",marginTop:"4px"}}>
+              {isUser&&p.uid!==me?.uid&&onChat&&(
+                <button onClick={()=>{onChat(p);onClose();}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"6px",padding:"12px 8px",background:"#f5f5f5",border:"none",borderRadius:"14px",cursor:"pointer"}}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="#2AABEE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span style={{color:"#2AABEE",fontSize:"12px",fontWeight:"600"}}>مراسلة</span>
+                </button>
+              )}
+              {(isCH||isGR)&&onChat&&(
+                <button onClick={()=>{onChat(p);onClose();}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"6px",padding:"12px 8px",background:"#f5f5f5",border:"none",borderRadius:"14px",cursor:"pointer"}}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="#2AABEE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  <span style={{color:"#2AABEE",fontSize:"12px",fontWeight:"600"}}>فتح</span>
+                </button>
+              )}
+              <button style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"6px",padding:"12px 8px",background:"#f5f5f5",border:"none",borderRadius:"14px",cursor:"pointer"}}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke="#2AABEE" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                <span style={{color:"#2AABEE",fontSize:"12px",fontWeight:"600"}}>كتم</span>
+              </button>
+              {(isUser||isCH)&&(
+                <button style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"6px",padding:"12px 8px",background:"#f5f5f5",border:"none",borderRadius:"14px",cursor:"pointer"}}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 0111.2 18.9a19.5 19.5 0 01-7-7A19.79 19.79 0 011.13 4.18 2 2 0 013.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.41 9.9A16 16 0 0014.1 17.09l.95-.95a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 18.42v-1.5z" stroke="#2AABEE" strokeWidth="2"/></svg>
+                  <span style={{color:"#2AABEE",fontSize:"12px",fontWeight:"600"}}>مكالمة</span>
+                </button>
+              )}
+              <button style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:"6px",padding:"12px 8px",background:"#f5f5f5",border:"none",borderRadius:"14px",cursor:"pointer"}}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="8" width="18" height="4" rx="1" stroke="#2AABEE" strokeWidth="2"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7" stroke="#2AABEE" strokeWidth="2" strokeLinecap="round"/><path d="M12 8v13M8.5 8a2.5 2.5 0 010-5c1.5 0 2.5 1.5 3.5 5M15.5 8a2.5 2.5 0 000-5c-1.5 0-2.5 1.5-3.5 5" stroke="#2AABEE" strokeWidth="2" strokeLinecap="round"/></svg>
+                <span style={{color:"#2AABEE",fontSize:"12px",fontWeight:"600"}}>هدية</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Info card */}
+          <div style={{background:"#fff",marginBottom:"8px"}}>
+            {showPhone&&(
+              <div style={{display:"flex",alignItems:"center",gap:"14px",padding:"14px 16px",borderBottom:"1px solid #f0f0f0"}}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.79 19.79 0 0111.2 18.9a19.5 19.5 0 01-7-7A19.79 19.79 0 011.13 4.18 2 2 0 013.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.41 9.9A16 16 0 0014.1 17.09l.95-.95a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 18.42v-1.5z" stroke="#2AABEE" strokeWidth="2"/></svg>
+                <div><div style={{color:"#000",fontSize:"15px",direction:"ltr",textAlign:"right"}}>{p.phone}</div><div style={{color:"#999",fontSize:"12px"}}>جوال</div></div>
+              </div>
+            )}
+            {p.bio&&(
+              <div style={{display:"flex",alignItems:"flex-start",gap:"14px",padding:"14px 16px",borderBottom:"1px solid #f0f0f0"}}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#2AABEE" strokeWidth="2"/><line x1="12" y1="16" x2="12" y2="12" stroke="#2AABEE" strokeWidth="2" strokeLinecap="round"/><line x1="12" y1="8" x2="12.01" y2="8" stroke="#2AABEE" strokeWidth="2" strokeLinecap="round"/></svg>
+                <div><div style={{color:"#000",fontSize:"15px",lineHeight:"1.5",whiteSpace:"pre-wrap"}}>{p.bio}</div><div style={{color:"#999",fontSize:"12px",marginTop:"3px"}}>النبذة</div></div>
+              </div>
+            )}
+            {p.username&&(
+              <div style={{display:"flex",alignItems:"center",gap:"14px",padding:"14px 16px",borderBottom:"1px solid #f0f0f0"}}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#2AABEE" strokeWidth="2"/><text x="12" y="17" textAnchor="middle" fontSize="12" fill="#2AABEE" fontWeight="bold">@</text></svg>
+                <div><div style={{color:"#2AABEE",fontSize:"15px",fontWeight:"600"}}>@{p.username}</div><div style={{color:"#999",fontSize:"12px"}}>اسم المستخدم</div></div>
+              </div>
+            )}
+            {isCH&&(
+              <div style={{display:"flex",alignItems:"center",gap:"14px",padding:"14px 16px"}}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke="#2AABEE" strokeWidth="2" strokeLinecap="round"/><circle cx="9" cy="7" r="4" stroke="#2AABEE" strokeWidth="2"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="#2AABEE" strokeWidth="2" strokeLinecap="round"/></svg>
+                <div><div style={{color:"#000",fontSize:"15px"}}>{fsub(p.subscribers||0)} مشترك</div><div style={{color:"#999",fontSize:"12px"}}>المشتركون</div></div>
+              </div>
+            )}
+          </div>
+
+          {/* Add contact */}
+          {isUser&&p.uid!==me?.uid&&(
+            <div style={{background:"#fff",marginBottom:"8px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:"14px",padding:"14px 16px",cursor:"pointer"}}>
+                <div style={{width:"42px",height:"42px",borderRadius:"50%",background:"#2AABEE",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" stroke="#fff" strokeWidth="2" strokeLinecap="round"/><circle cx="9" cy="7" r="4" stroke="#fff" strokeWidth="2"/><line x1="19" y1="8" x2="19" y2="14" stroke="#fff" strokeWidth="2" strokeLinecap="round"/><line x1="16" y1="11" x2="22" y2="11" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
+                </div>
+                <span style={{color:"#2AABEE",fontSize:"15px",fontWeight:"600"}}>إضافة لجهات الاتصال</span>
+              </div>
+            </div>
+          )}
+
+          {/* Mutual groups */}
+          {mutual.length>0&&(
+            <div style={{background:"#fff",marginBottom:"8px",padding:"14px 16px"}}>
+              <div style={{color:"#999",fontSize:"13px",marginBottom:"10px"}}>{mutual.length} مجموعة مشتركة</div>
+              {mutual.map(g=>(
+                <div key={g.id} style={{display:"flex",alignItems:"center",gap:"12px",padding:"6px 0"}}>
+                  <div style={{width:"42px",height:"42px",borderRadius:"50%",background:rc(g.name),display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:"700",fontSize:"18px"}}>{g.name.charAt(0)}</div>
+                  <div>
+                    <div style={{color:"#000",fontSize:"15px",fontWeight:"600"}}>{g.name}</div>
+                    <div style={{color:"#999",fontSize:"12px"}}>{(g.members||[]).length} عضو</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Channel gifts shown in profile */}
+          {isCH&&channelGifts&&channelGifts.length>0&&(
+            <div style={{background:"#fff",marginBottom:"8px",padding:"14px 16px"}}>
+              <div style={{color:"#999",fontSize:"13px",marginBottom:"10px"}}>الهدايا المُرسلة للقناة</div>
+              <div style={{display:"flex",gap:"8px",flexWrap:"wrap"}}>
+                {channelGifts.slice(0,8).map((g,i)=>(
+                  <div key={i} style={{textAlign:"center",background:"#f5f5f5",borderRadius:"12px",padding:"8px 12px"}}>
+                    <div style={{fontSize:"28px"}}>{g.gift?.emoji}</div>
+                    <div style={{color:"#666",fontSize:"11px"}}>{g.senderName}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -377,6 +491,10 @@ export default function App() {
   const [rx,setRx]=useState({});
   const [twoPw,setTwoPw]=useState("");
   const [notifs,setNt]=useState({pm:true,gr:true,ch:false,snd:true});
+  const [appLocked,setAppLocked]=useState(false);
+  const [lockPin,setLockPin]=useState("");
+  const [pinInput,setPinInput]=useState("");
+  const [darkMode,setDarkMode]=useState(true);
   const [privSettings,setPrivSettings]=useState({showPhone:false,showLastSeen:true,showOnline:true});
   const [showGifts,setShowGifts]=useState(false);
   const [folders,setFolders]=useState([]);
@@ -828,7 +946,11 @@ export default function App() {
     {l:"⎘ نسخ",a:()=>{navigator.clipboard?.writeText(ctx.msg?.text||"");setCtx(null);}},
     ...(ctx.msg?.from===user?.uid&&!ctx.msg?.isOfficialBot?[{l:"✏️ تعديل",a:()=>{setEd(ctx.msg);setInp(ctx.msg.text||"");setCtx(null);setTimeout(()=>inpRef.current?.focus(),50);}}]:[]),
     ...(isAdmin||ctx.msg?.from===user?.uid?[{l:"📌 تثبيت",a:()=>pinMsg(ctx.msg)}]:[]),
-    {l:"🔗 نسخ الرابط",a:()=>{navigator.clipboard?.writeText(`Termin/${actData?.username||actId}/${ctx.msg?.id}`);setCtx(null);alert("تم نسخ الرابط!");}},
+    {l:"🔗 نسخ الرابط",a:async()=>{
+    const link=`Termin/${actData?.username||actId}/${ctx.msg?.id}`;
+    try{if(navigator.clipboard){await navigator.clipboard.writeText(link);alert("✅ تم نسخ الرابط: "+link);}else{const el=document.createElement("textarea");el.value=link;document.body.appendChild(el);el.select();document.execCommand("copy");document.body.removeChild(el);alert("✅ تم نسخ الرابط");}}catch{alert("الرابط: "+link);}
+    setCtx(null);
+  }},
     {l:"🔖 حفظ",a:async()=>{const sv=chats.find(c=>c.type==="saved");if(sv){const nid=uid();await set(ref(db,`messages/${sv.chatId||sv.id}/${nid}`),{...ctx.msg,id:nid,chatId:sv.chatId||sv.id,createdAt:Date.now()+1}).catch(()=>{});}setCtx(null);}},
     ...(isCh||isGr||isOB?[{l:"🚩 بلاغ",a:()=>{setRepT(ctx.msg);setCtx(null);},d:true}]:[]),
     ...(ctx.msg?.from===user?.uid?[{l:"🗑 حذف",a:async()=>{if(actId)await remove(ref(db,`messages/${actId}/${ctx.msg.id}`)).catch(()=>{});setCtx(null);},d:true}]:[]),
@@ -843,6 +965,24 @@ export default function App() {
   );
 
   if(!user) return <AuthScreen/>;
+
+  // App lock screen
+  if(appLocked&&lockPin) return (
+    <div style={{height:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"20px",fontFamily:"'Segoe UI',Tahoma,sans-serif",direction:"rtl"}}>
+      <div style={{fontSize:"56px"}}>🔒</div>
+      <div style={{color:T.text,fontSize:"20px",fontWeight:"800"}}>تيرمين مقفل</div>
+      <div style={{color:T.dim,fontSize:"13px"}}>أدخل رمز القفل للمتابعة</div>
+      <input value={pinInput} onChange={e=>setPinInput(e.target.value)} placeholder="رمز القفل" type="password"
+        style={{background:T.inp2,border:`1px solid ${T.brd}`,borderRadius:"14px",padding:"14px 20px",color:T.text,fontSize:"20px",outline:"none",textAlign:"center",width:"200px",letterSpacing:"8px",fontFamily:"inherit"}}
+        onKeyDown={e=>{if(e.key==="Enter"){if(pinInput===lockPin){setAppLocked(false);setPinInput("");}else{alert("رمز غير صحيح");setPinInput("");}}}
+        }/>
+      <button onClick={()=>{if(pinInput===lockPin){setAppLocked(false);setPinInput("");}else{alert("رمز غير صحيح");setPinInput("");}}}
+        style={{background:T.btn,border:"none",borderRadius:"12px",padding:"13px 32px",color:"#fff",fontWeight:"700",fontSize:"15px",cursor:"pointer",fontFamily:"inherit"}}>
+        🔓 فتح التطبيق
+      </button>
+      <style>{`*{box-sizing:border-box;margin:0;padding:0}`}</style>
+    </div>
+  );
 
   // Search results
   const renderSearch=()=>(
@@ -888,7 +1028,7 @@ export default function App() {
     <div style={{display:"flex",height:"100vh",width:"100%",background:T.bg,fontFamily:"'Segoe UI',Tahoma,sans-serif",direction:"rtl",overflow:"hidden"}}
       onClick={()=>{setSM(false);setAM(false);setCtx(null);setSE(false);}}>
 
-      {prof&&<ProfSheet p={prof} onClose={()=>setProf(null)} onChat={prof.uid&&!prof.type?openPM:(prof.type==="channel"||prof.type==="group")?()=>openChat(prof.id,prof):null} me={user} chats={chats} onlineUsers={onlineUsers}/>}
+      {prof&&<ProfSheet p={prof} onClose={()=>setProf(null)} onChat={prof.uid&&!prof.type?openPM:(prof.type==="channel"||prof.type==="group")?()=>openChat(prof.id,prof):null} me={user} chats={chats} onlineUsers={onlineUsers} channelGifts={prof.type==="channel"?msgs.filter(m=>m.type==="gift"):[]}/>}
       {repT&&<RepSheet onClose={()=>setRepT(null)} onReport={sendReport}/>}
       {showGifts&&<GiftsModal onClose={()=>setShowGifts(false)} onSend={sendGift} userStars={ud?.stars||0}/>}
 
@@ -975,6 +1115,11 @@ export default function App() {
                   </div>
                 )},
                 {title:"المجلدات",items:[{ic:"fol",l:"إنشاء مجلد جديد",a:()=>setModal("newFolder")}]},
+                {title:"شحن النجوم",items:[{ic:"gift",l:"شحن النجوم ⭐",d:`رصيدك: ${ud?.stars||0} نجمة`,a:()=>setModal("buyStars")}]},
+                {title:"الأمان والدعم",items:[
+                  {ic:"lk",l:"الأمان والحماية",a:()=>setModal("security")},
+                  {ic:"lk",l:"قفل التطبيق",d:lockPin?"مفعّل 🔒":"معطّل",a:()=>setModal("appLock")},
+                ]},
                 {title:"الدعم",items:[{ic:"sup",l:"الدعم الفني",a:()=>{openSup();setTab("chats");}}]},
                 ...(isOwner?[{title:"الإدارة",items:[{ic:"cr",l:"لوحة تحكم المالك",a:()=>window.open("/admin","_blank")}]}]:[]),
               ].map(g=>(
@@ -1449,11 +1594,83 @@ export default function App() {
           </div>
         </Mdl>
       )}
+
+      {/* ─── Buy Stars Modal ─── */}
+      {modal==="buyStars"&&(
+        <Mdl title="⭐ شحن النجوم" onClose={()=>setModal(null)} w="460px">
+          <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
+            <div style={{background:T.inp2,borderRadius:"12px",padding:"12px",textAlign:"center"}}>
+              <div style={{color:T.gold,fontSize:"28px",fontWeight:"900"}}>{ud?.stars||0} ⭐</div>
+              <div style={{color:T.dim,fontSize:"12px"}}>رصيدك الحالي</div>
+            </div>
+            <div style={{color:T.dim,fontSize:"13px",marginBottom:"6px"}}>اختر باقة النجوم:</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px"}}>
+              {[{s:100,p:"1$"},{s:500,p:"5$"},{s:1000,p:"9$"},{s:2500,p:"20$"},{s:5000,p:"35$"},{s:10000,p:"65$"}].map(pkg=>(
+                <button key={pkg.s} onClick={async()=>{
+                  const chatId=`stars_charge_${user?.uid}`;
+                  const orderId="ORD-"+(Date.now().toString().slice(-8));
+                  // Create charging chat if not exists
+                  const chatData={id:chatId,type:"official_bot",name:"شحن النجوم",username:"starscharge",isOfficial:true,verified:true,members:[user?.uid,BOT_ID],createdAt:Date.now(),photoURL:""};
+                  const s=await get(ref(db,`chats/${chatId}`)).catch(()=>null);
+                  if(!s?.exists()){
+                    await set(ref(db,`chats/${chatId}`),chatData).catch(()=>{});
+                    await set(ref(db,`userChats/${user?.uid}/${chatId}`),{chatId,lastMessage:"خدمة شحن",lastTime:now(),unread:0,order:Date.now(),type:"official_bot",name:"شحن النجوم",color:"#f0a040"}).catch(()=>{});
+                  }
+                  // Send charging instructions
+                  const mid=uid();
+                  await set(ref(db,`messages/${chatId}/${mid}`),{id:mid,chatId,text:`🌟 طلب شحن نجوم
+
+الباقة: ${pkg.s} نجمة بـ ${pkg.p}
+
+📱 رقم التحويل (Super Kye):
+917361038362
+
+🔢 رقم الطلب: ${orderId}
+
+⚠️ بعد التحويل، أرسل صورة الإيصال هنا وسيتم مراجعة طلبك خلال 24 ساعة.`,from:BOT_ID,senderName:"شحن النجوم",time:now(),type:"text",isOfficialBot:true,createdAt:Date.now()}).catch(()=>{});
+                  // Save pending order to admin
+                  await set(ref(db,`starOrders/${orderId}`),{orderId,userId:user?.uid,username:ud?.username,stars:pkg.s,price:pkg.p,status:"pending",createdAt:Date.now()}).catch(()=>{});
+                  setModal(null);
+                  openChat(chatId,chatData);
+                }} style={{padding:"14px",background:`${T.gold}12`,border:`1px solid ${T.gold}30`,borderRadius:"14px",cursor:"pointer",textAlign:"center"}}>
+                  <div style={{color:T.gold,fontSize:"22px",fontWeight:"900"}}>{pkg.s>=1000?`${pkg.s/1000}K`:pkg.s} ⭐</div>
+                  <div style={{color:T.text,fontSize:"15px",fontWeight:"700",marginTop:"4px"}}>{pkg.p}</div>
+                </button>
+              ))}
+            </div>
+            <div style={{background:`${T.btn}10`,border:`1px solid ${T.btn}25`,borderRadius:"12px",padding:"12px",color:T.dim,fontSize:"12px",lineHeight:"1.7"}}>
+              💡 بعد اختيار الباقة، انتقل إلى محادثة الشحن وأرسل صورة إيصال التحويل. سيتم مراجعة طلبك وإضافة النجوم خلال 24 ساعة.
+            </div>
+          </div>
+        </Mdl>
+      )}
+
+      {/* ─── App Lock Modal ─── */}
+      {modal==="appLock"&&(
+        <Mdl title="🔒 قفل التطبيق" onClose={()=>setModal(null)}>
+          <div style={{display:"flex",flexDirection:"column",gap:"14px",alignItems:"center",textAlign:"center"}}>
+            <div style={{fontSize:"48px"}}>{lockPin?"🔒":"🔓"}</div>
+            <div style={{color:T.text,fontWeight:"700",fontSize:"15px"}}>قفل التطبيق {lockPin?"مفعّل":"معطّل"}</div>
+            {!lockPin&&<FInp label="رمز القفل (4-6 أرقام)" val={pinInput} set={setPinInput} ph="مثال: 1234" type="password"/>}
+            <div style={{color:T.dim,fontSize:"13px",lineHeight:"1.7"}}>سيتم قفل التطبيق تلقائياً عند إغلاقه</div>
+            <PBtn color={lockPin?T.err:T.btn} kids={lockPin?"🔓 إزالة القفل":"🔒 تفعيل القفل"} go={()=>{
+              if(lockPin){setLockPin("");setPinInput("");alert("✅ تم إزالة قفل التطبيق");}
+              else {
+                if(!pinInput||pinInput.length<4){alert("أدخل رمز مكون من 4 أرقام على الأقل");return;}
+                setLockPin(pinInput);setPinInput("");alert("✅ تم تفعيل قفل التطبيق");
+              }
+              setModal(null);
+            }}/>
+          </div>
+        </Mdl>
+      )}
+
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0}
         ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${T.acc};border-radius:4px}
         @keyframes mi{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}
         @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+        @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
         textarea{scrollbar-width:none}textarea::-webkit-scrollbar{display:none}
         input::placeholder,textarea::placeholder{color:${T.dim}}
         input,textarea,button{-webkit-tap-highlight-color:transparent}
@@ -1461,3 +1678,4 @@ export default function App() {
     </div>
   );
 }
+
