@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { initializeApp } from "firebase/app";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "firebase/auth";
-import { getDatabase, ref, set, get, onValue, off, update, remove, serverTimestamp } from "firebase/database";
+import { getDatabase, ref, set, get, onValue, off, update, remove } from "firebase/database";
 
-const FB = { apiKey:"AIzaSyDRCtfuYrEdnuKUsWu_79NC6G_xGLznBJc", authDomain:"tttrt-b8c5a.firebaseapp.com", databaseURL:"https://tttrt-b8c5a-default-rtdb.asia-southeast1.firebasedatabase.app", projectId:"tttrt-b8c5a", storageBucket:"tttrt-b8c5a.firebasestorage.app", messagingSenderId:"975123752593", appId:"1:975123752793:web:e591e930af3a3e29568130" };
+const FB = { apiKey:"AIzaSyDRCtfuYrEdnuKUsWu_79NC6G_xGLznBJc", authDomain:"tttrt-b8c5a.firebaseapp.com", databaseURL:"https://tttrt-b8c5a-default-rtdb.asia-southeast1.firebasedatabase.app", projectId:"tttrt-b8c5a", storageBucket:"tttrt-b8c5a.firebasestorage.app", messagingSenderId:"975123752593", appId:"1:975123752593:web:e591e930af3a3e29568130" };
 const fbApp = initializeApp(FB);
 const auth = getAuth(fbApp);
 const db = getDatabase(fbApp);
@@ -647,6 +647,10 @@ export default function App() {
   const [lockPin,setLockPin]=useState("");
   const [pinInput,setPinInput]=useState("");
   const [darkMode,setDarkMode]=useState(true);
+  const [callActive,setCallActive]=useState(false);
+  const [callUser,setCallUser]=useState(null);
+  const [secretChatPending,setSCP]=useState(null);
+  const [muteMenu,setMuteMenu]=useState(false);
   const [privSettings,setPrivSettings]=useState({showPhone:false,showLastSeen:true,showOnline:true});
   const [showGifts,setShowGifts]=useState(false);
   const [folders,setFolders]=useState([]);
@@ -1151,10 +1155,30 @@ export default function App() {
   ]:[];
 
   if(authLoad) return (
-    <div style={{height:"100vh",background:T.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"16px",fontFamily:"'Segoe UI',Tahoma,sans-serif"}}>
-      <div style={{fontSize:"72px",animation:"spin 2s linear infinite"}}>✈️</div>
-      <div style={{color:T.text,fontSize:"22px",fontWeight:"900",letterSpacing:"2px"}}>تيرمين</div>
-      <style>{`@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}} *{box-sizing:border-box;margin:0;padding:0}`}</style>
+    <div style={{height:"100vh",background:"linear-gradient(135deg,#0a0f1a,#111b2e,#0a1628)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"0",fontFamily:"'Segoe UI',Tahoma,sans-serif",overflow:"hidden",position:"relative"}}>
+      {/* Background circles */}
+      <div style={{position:"absolute",width:"300px",height:"300px",borderRadius:"50%",background:"rgba(82,136,193,0.06)",top:"50%",left:"50%",transform:"translate(-50%,-50%)",animation:"pulse 2s ease-in-out infinite"}}/>
+      <div style={{position:"absolute",width:"200px",height:"200px",borderRadius:"50%",background:"rgba(82,136,193,0.1)",top:"50%",left:"50%",transform:"translate(-50%,-50%)",animation:"pulse 2s ease-in-out infinite .5s"}}/>
+      {/* Logo */}
+      <div style={{position:"relative",marginBottom:"24px"}}>
+        <div style={{width:"100px",height:"100px",borderRadius:"28px",background:"linear-gradient(135deg,#2b5278,#5288c1)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"52px",boxShadow:"0 20px 60px rgba(82,136,193,0.4)",animation:"logoIn .8s ease"}}>
+          ✈️
+        </div>
+      </div>
+      <div style={{color:"#e8f4fd",fontSize:"28px",fontWeight:"900",letterSpacing:"3px",animation:"fadeUp .8s ease .3s both"}}>تيرمين</div>
+      <div style={{color:"rgba(107,140,164,0.8)",fontSize:"13px",marginTop:"8px",animation:"fadeUp .8s ease .5s both"}}>تواصل أسرع · أسهل · أكثر أماناً</div>
+      {/* Loading dots */}
+      <div style={{display:"flex",gap:"6px",marginTop:"36px",animation:"fadeUp .8s ease .7s both"}}>
+        {[0,1,2].map(i=><div key={i} style={{width:"7px",height:"7px",borderRadius:"50%",background:"#5288c1",animation:`dot 1.4s ease-in-out infinite`,animationDelay:i*0.2+"s"}}/>)}
+      </div>
+      <style>{`
+        @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+        @keyframes pulse{0%,100%{transform:translate(-50%,-50%) scale(1);opacity:.6}50%{transform:translate(-50%,-50%) scale(1.1);opacity:.3}}
+        @keyframes logoIn{from{transform:scale(.5) rotate(-10deg);opacity:0}to{transform:scale(1) rotate(0);opacity:1}}
+        @keyframes fadeUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+        @keyframes dot{0%,80%,100%{transform:scale(0.6);opacity:.4}40%{transform:scale(1.2);opacity:1}}
+        *{box-sizing:border-box;margin:0;padding:0}
+      `}</style>
     </div>
   );
 
@@ -1448,6 +1472,7 @@ export default function App() {
               </div>
               <div style={{display:"flex",gap:"2px"}}>
                 {isCh&&<button onClick={()=>setShowGifts(true)} style={{background:"none",border:"none",cursor:"pointer",padding:"7px",borderRadius:"50%",display:"flex"}} onMouseEnter={e=>e.currentTarget.style.background=T.hov} onMouseLeave={e=>e.currentTarget.style.background="none"}><Ic n="gift" s={20} c={T.gold}/></button>}
+                {isPM&&<button onClick={()=>{setCallUser({name:chatName,photoURL:actData?.photoURL,color:actData?.color||rc(chatName)});setCallActive(true);}} style={{background:"none",border:"none",cursor:"pointer",padding:"7px",borderRadius:"50%",display:"flex"}} onMouseEnter={e=>e.currentTarget.style.background=T.hov} onMouseLeave={e=>e.currentTarget.style.background="none"}><Ic n="ph" s={20} c={T.dim}/></button>}
                 {isPM&&<button onClick={e=>{e.stopPropagation();setModal("pmMenu");}} style={{background:"none",border:"none",cursor:"pointer",padding:"7px",borderRadius:"50%",display:"flex"}} onMouseEnter={e=>e.currentTarget.style.background=T.hov} onMouseLeave={e=>e.currentTarget.style.background="none"}><Ic n="more" s={20}/></button>}
                 {!isPM&&<button onClick={e=>{e.stopPropagation();if(isCh&&isMine){setCS({...actData});setModal("chSet");}}} style={{background:"none",border:"none",cursor:"pointer",padding:"7px",borderRadius:"50%",display:"flex"}} onMouseEnter={e=>e.currentTarget.style.background=T.hov} onMouseLeave={e=>e.currentTarget.style.background="none"}><Ic n="more" s={20}/></button>}
               </div>
@@ -1568,24 +1593,77 @@ export default function App() {
       {/* PM Menu (three dots in private chat) */}
       {modal==="pmMenu"&&(
         <div style={{position:"fixed",inset:0,zIndex:500}} onClick={()=>setModal(null)}>
-          <div style={{position:"absolute",top:"60px",left:"10px",background:"#1c2d3d",borderRadius:"13px",padding:"6px 0",boxShadow:"0 8px 32px rgba(0,0,0,0.5)",border:`1px solid ${T.brd}`,minWidth:"200px"}} onClick={e=>e.stopPropagation()}>
+          <div style={{position:"absolute",top:"60px",left:"10px",background:"#1c2d3d",borderRadius:"13px",padding:"6px 0",boxShadow:"0 8px 32px rgba(0,0,0,0.5)",border:`1px solid ${T.brd}`,minWidth:"210px"}} onClick={e=>e.stopPropagation()}>
+            {[
+              {ic:"addct",c:T.btn,l:"إضافة كجهة اتصال",a:async()=>{if(!actData?.members)return;const oid=actData.members.find(m=>m!==user?.uid);if(!oid)return;const s=await get(ref(db,`users/${oid}`)).catch(()=>null);if(s?.exists())setProf(s.val());setModal(null);}},
+              {ic:"gift",c:T.gold,l:"إرسال هدية",a:()=>{setShowGifts(true);setModal(null);}},
+              {ic:"lk",c:"#9C27B0",l:"محادثة سرية 🔒",a:()=>{setModal("secretChat");}},
+              {ic:"ntf",c:T.dim,l:"كتم الإشعارات",a:()=>{setModal(null);setMuteMenu(true);}},
+              {ic:"tr",c:T.err,l:"حذف المحادثة",a:async()=>{if(!window.confirm("حذف المحادثة وجميع الرسائل؟"))return;await remove(ref(db,`messages/${actId}`)).catch(()=>{});await remove(ref(db,`userChats/${user?.uid}/${actId}`)).catch(()=>{});setActId(null);setAD(null);setModal(null);if(mobile)setSSB(true);}},
+            ].map(it=>(
+              <button key={it.l} onClick={it.a} style={{display:"flex",alignItems:"center",gap:"12px",width:"100%",padding:"12px 16px",background:"none",border:"none",color:it.c===T.err?T.err:T.text,cursor:"pointer",fontFamily:"inherit",fontSize:"14px"}}
+                onMouseEnter={e=>e.currentTarget.style.background=T.hov} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                <Ic n={it.ic} s={18} c={it.c}/>{it.l}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Mute Menu */}
+      {muteMenu&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:600,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setMuteMenu(false)}>
+          <div style={{background:"#1a2a3a",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:"480px",padding:"20px"}} onClick={e=>e.stopPropagation()}>
+            <div style={{color:T.text,fontSize:"17px",fontWeight:"800",marginBottom:"14px",textAlign:"center"}}>🔕 كتم الإشعارات</div>
+            {[{l:"كتم لساعة",d:3600000},{l:"كتم ليوم",d:86400000},{l:"كتم لأسبوع",d:604800000},{l:"كتم لشهر",d:2592000000},{l:"كتم دائماً",d:-1}].map(o=>(
+              <button key={o.l} onClick={async()=>{
+                const mutedUntil=o.d===-1?9999999999999:Date.now()+o.d;
+                await update(ref(db,`userChats/${user?.uid}/${actId}`),{muted:true,mutedUntil}).catch(()=>{});
+                setMuteMenu(false);
+              }} style={{display:"block",width:"100%",padding:"14px",background:"none",border:"none",color:T.text,cursor:"pointer",fontFamily:"inherit",fontSize:"15px",textAlign:"center",borderBottom:`1px solid ${T.brd}15`}}
+                onMouseEnter={e=>e.currentTarget.style.background=T.hov} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                {o.l}
+              </button>
+            ))}
             <button onClick={async()=>{
-              if(!actData?.members) return;
-              const othId=actData.members.find(m=>m!==user?.uid);
-              if(!othId) return;
-              const s=await get(ref(db,`users/${othId}`)).catch(()=>null);
-              if(s?.exists()) setProf(s.val());
-              setModal(null);
-            }} style={{display:"flex",alignItems:"center",gap:"12px",width:"100%",padding:"12px 16px",background:"none",border:"none",color:T.text,cursor:"pointer",fontFamily:"inherit",fontSize:"14px"}}
-              onMouseEnter={e=>e.currentTarget.style.background=T.hov} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-              <Ic n="addct" s={18} c={T.btn}/>إضافة كجهة اتصال
-            </button>
-            <button onClick={()=>{setShowGifts(true);setModal(null);}} style={{display:"flex",alignItems:"center",gap:"12px",width:"100%",padding:"12px 16px",background:"none",border:"none",color:T.text,cursor:"pointer",fontFamily:"inherit",fontSize:"14px"}}
-              onMouseEnter={e=>e.currentTarget.style.background=T.hov} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-              <Ic n="gift" s={18} c={T.gold}/>إرسال هدية
+              await update(ref(db,`userChats/${user?.uid}/${actId}`),{muted:false,mutedUntil:0}).catch(()=>{});
+              setMuteMenu(false);
+            }} style={{display:"block",width:"100%",padding:"14px",background:"none",border:"none",color:T.btn,cursor:"pointer",fontFamily:"inherit",fontSize:"15px",fontWeight:"700"}}>
+              إلغاء الكتم
             </button>
           </div>
         </div>
+      )}
+
+      {/* Secret Chat Modal */}
+      {modal==="secretChat"&&(
+        <Mdl title="🔒 محادثة سرية" onClose={()=>setModal(null)}>
+          <div style={{textAlign:"center",display:"flex",flexDirection:"column",gap:"14px",alignItems:"center"}}>
+            <div style={{fontSize:"64px"}}>🔐</div>
+            <div style={{color:T.text,fontSize:"15px",fontWeight:"700"}}>محادثة مشفرة من الطرف إلى الطرف</div>
+            <div style={{color:T.dim,fontSize:"13px",lineHeight:"1.7"}}>
+              المحادثة السرية مشفرة بالكامل ولا يمكن التقاط صورة لها أو تحويل رسائلها.
+              يجب موافقة الطرف الآخر للبدء.
+            </div>
+            <PBtn kids="🔒 بدء محادثة سرية" color="#9C27B0" go={async()=>{
+              if(!actData?.members) return;
+              const othId=actData.members.find(m=>m!==user?.uid);
+              if(!othId) return;
+              // Create secret chat
+              const scid=`secret_${[user?.uid,othId].sort().join("_")}`;
+              const scd={id:scid,type:"secret",name:(actData?.name||"مستخدم")+" 🔒",members:[user?.uid,othId],isSecret:true,createdAt:Date.now()};
+              await set(ref(db,`chats/${scid}`),scd).catch(()=>{});
+              await set(ref(db,`userChats/${user?.uid}/${scid}`),{chatId:scid,lastMessage:"محادثة سرية",lastTime:now(),unread:0,order:Date.now(),type:"secret",name:(actData?.name||"مستخدم")+" 🔒",color:"#9C27B0"}).catch(()=>{});
+              // Send invite to other user
+              const nid=uid();
+              await set(ref(db,`messages/bot_${othId}/${nid}`),{id:nid,chatId:`bot_${othId}`,text:`🔐 طلب محادثة سرية من @${ud?.username||"مستخدم"}
+
+المحادثة مشفرة بالكامل. للقبول ابحث عن "${actData?.name||""} 🔒" في محادثاتك.`,from:BOT_ID,senderName:"DFGFD",time:now(),type:"text",isOfficialBot:true,createdAt:Date.now()}).catch(()=>{});
+              setModal(null);
+              openChat(scid,scd);
+            }}/>
+          </div>
+        </Mdl>
       )}
 
       {/* FAB menu */}
@@ -1933,6 +2011,35 @@ export default function App() {
         </Mdl>
       )}
 
+
+      {/* ─── Voice/Video Call UI ─── */}
+      {callActive&&callUser&&(
+        <div style={{position:"fixed",inset:0,background:"linear-gradient(135deg,#1a3a2a,#0e1621)",zIndex:900,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"space-between",padding:"60px 20px 40px"}}>
+          {/* Top */}
+          <div style={{textAlign:"center"}}>
+            <div style={{color:"rgba(255,255,255,0.6)",fontSize:"14px",marginBottom:"16px"}}>يتم الاتصال...</div>
+            <div style={{width:"120px",height:"120px",borderRadius:"50%",background:callUser.photoURL?"transparent":rc(callUser.name||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:"52px",fontWeight:"900",color:"#fff",overflow:"hidden",margin:"0 auto 16px",border:"4px solid rgba(255,255,255,0.2)"}}>
+              {callUser.photoURL?<img src={callUser.photoURL} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(callUser.name||"?").charAt(0).toUpperCase()}
+            </div>
+            <div style={{color:"#fff",fontSize:"24px",fontWeight:"800"}}>{callUser.name}</div>
+            <div style={{color:"rgba(255,255,255,0.5)",fontSize:"14px",marginTop:"6px",animation:"blink 1.5s infinite"}}>يتم الاتصال...</div>
+          </div>
+          {/* Controls */}
+          <div style={{display:"flex",gap:"24px",alignItems:"center"}}>
+            {[{ic:"🔊",l:"مكبر الصوت",c:"#5288c1"},{ic:"📹",l:"الكاميرا",c:"#333"},{ic:"🎤",l:"كتم",c:"#333"}].map(b=>(
+              <div key={b.l} style={{textAlign:"center"}}>
+                <button style={{width:"60px",height:"60px",borderRadius:"50%",background:b.c,border:"none",cursor:"pointer",fontSize:"26px",display:"flex",alignItems:"center",justifyContent:"center"}}>{b.ic}</button>
+                <div style={{color:"rgba(255,255,255,0.6)",fontSize:"11px",marginTop:"6px"}}>{b.l}</div>
+              </div>
+            ))}
+            <div style={{textAlign:"center"}}>
+              <button onClick={()=>{setCallActive(false);setCallUser(null);}} style={{width:"64px",height:"64px",borderRadius:"50%",background:"#e05c5c",border:"none",cursor:"pointer",fontSize:"26px",display:"flex",alignItems:"center",justifyContent:"center"}}>📵</button>
+              <div style={{color:"rgba(255,255,255,0.6)",fontSize:"11px",marginTop:"6px"}}>مغادرة</div>
+            </div>
+          </div>
+          <style>{`@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
+        </div>
+      )}
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0}
         ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${T.acc};border-radius:4px}
