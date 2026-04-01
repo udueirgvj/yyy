@@ -13,6 +13,8 @@ const BOT_ID = "bot_dfgfd_official";
 const SUP_ID = "support_official";
 const BF_ID = "bot_botfather_official";
 const APP_CH = "channel_termeen_official";
+const SSPT_ID = "bot_sspt_official";  // Phone change bot
+const ANTI_ID = "bot_sdsf_official";  // Anti-impersonation bot
 
 const COLORS = ["#E57373","#4CAF50","#9C27B0","#FF9800","#00BCD4","#F44336","#2196F3","#FF5722"];
 const rc = s => COLORS[(s||"A").charCodeAt(0)%COLORS.length];
@@ -370,6 +372,146 @@ function GiftsModal({onClose,onSend,userStars=0}) {
   );
 }
 
+
+
+// SSPT phone change handler
+async function handleSSPT(text,cid,user,ud,db) {
+  const t=text.trim();
+  // Check if it's a phone number (11 digits)
+  const phoneRegex=/^\+?[0-9]{10,14}$/;
+  if(phoneRegex.test(t.replace(/\s/g,""))){
+    const phone=t.replace(/\s/g,"");
+    // Check if this is their current phone
+    if(ud?.phone===phone||ud?.phone===phone.replace("+","+666").slice(0,15)){
+      // Generate new phone
+      const newPhone="+666"+Math.floor(Math.random()*90000000+10000000);
+      const orderId="RPH-"+Date.now().toString().slice(-6);
+      await update(ref(db,`users/${user.uid}`),{phone:newPhone}).catch(()=>{});
+      const rid=uid();
+      await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:`✅ عزيزي، تم تغيير رقم هاتفك!
+
+📞 الرقم القديم: ${phone}
+📞 رقمك الجديد: ${newPhone}
+
+🕐 وقت التغيير: ${new Date().toLocaleString("ar-SA")}
+🔢 رقم الطلب: ${orderId}`,from:SSPT_ID,senderName:"SSPT",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
+      await update(ref(db,`userChats/${user.uid}/${cid}`),{lastMessage:"تم تغيير الرقم",lastTime:"",order:Date.now()+1});
+      // Log to admin
+      await set(ref(db,`phoneChanges/${orderId}`),{orderId,userId:user.uid,username:ud?.username,oldPhone:phone,newPhone,createdAt:Date.now()}).catch(()=>{});
+    } else {
+      const rid=uid();
+      await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:"⚠️ عزيزي، وجدنا خطأ في الرقم!
+
+هذا ليس رقم حسابك.
+عليك التأكد من صحة الرقم وإعادة المحاولة.
+
+⛔ تحذير: عدم إرسال أرقام عشوائية في قسم SSPT.",from:SSPT_ID,senderName:"SSPT",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
+    }
+  } else if(t.toLowerCase()==="/start"||t==="بداء"||t==="بداء"){
+    const rid=uid();
+    await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:"مرحباً بك عزيزي 👋
+
+نحن سعداء بتواصلك معنا.
+
+أرسلي رقمك المكون من 11 رقم وسيتم مراجعته خلال دقائق ويتم استبدال الرقم برقم جديد.
+
+📞 أو اكتب: شراء رقم مميز",from:SSPT_ID,senderName:"SSPT",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
+    await update(ref(db,`userChats/${user.uid}/${cid}`),{lastMessage:"مرحباً بك",lastTime:"",order:Date.now()+1});
+  }
+}
+
+// SDSF anti-impersonation handler
+async function handleSDSF(text,cid,user,ud,db) {
+  const rid=uid();
+  const orderId="IMP-"+Date.now().toString().slice(-6);
+  // Save report
+  await set(ref(db,`imposterReports/${orderId}`),{id:orderId,reporterId:user.uid,reporterUsername:ud?.username,targetInfo:text,details:text,status:"pending",createdAt:Date.now()}).catch(()=>{});
+  await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:`✅ تم استلام بلاغك.
+
+سيراجع فريق SDSF حالة الطلب ويتم الرد عليك.
+
+🔢 رقم التذكرة: ${orderId}`,from:ANTI_ID,senderName:"SDSF",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
+  await update(ref(db,`userChats/${user.uid}/${cid}`),{lastMessage:"تم استلام البلاغ",lastTime:"",order:Date.now()+1});
+}
+
+// SSPT bot chat creation
+async function openSSPT(user,openChat,db) {
+  if(!user) return;
+  const cid="sspt_"+user.uid;
+  const ssptData={id:cid,type:"official_bot",name:"SSPT",username:"sspt",isOfficial:true,verified:true,color:"#2196F3"};
+  try {
+    const s=await get(ref(db,`chats/${cid}`));
+    if(!s.exists()){
+      await set(ref(db,`chats/${cid}`),{...ssptData,members:[user.uid,SSPT_ID],createdAt:Date.now(),photoURL:""});
+      await set(ref(db,`userChats/${user.uid}/${cid}`),{chatId:cid,lastMessage:"تغيير الأرقام",lastTime:"",unread:1,order:Date.now(),type:"official_bot",name:"SSPT",color:"#2196F3"});
+    }
+  } catch {}
+  openChat(cid,ssptData);
+}
+
+// SDSF anti-impersonation bot
+async function openSDSF(user,openChat,db) {
+  if(!user) return;
+  const cid="sdsf_"+user.uid;
+  const data={id:cid,type:"official_bot",name:"SDSF",username:"sdsf",isOfficial:true,verified:true,color:"#9C27B0"};
+  try {
+    const s=await get(ref(db,`chats/${cid}`));
+    if(!s.exists()){
+      await set(ref(db,`chats/${cid}`),{...data,members:[user.uid,ANTI_ID],createdAt:Date.now(),photoURL:""});
+      await set(ref(db,`userChats/${user.uid}/${cid}`),{chatId:cid,lastMessage:"بلاغ انتحال",lastTime:"",unread:0,order:Date.now()-1,type:"official_bot",name:"SDSF",color:"#9C27B0"});
+      const wm=uid();
+      await set(ref(db,`messages/${cid}/${wm}`),{id:wm,chatId:cid,text:"مرحباً! أنا مكافح الانتحال SDSF 🛡
+
+أرسل لي معلومات الحساب الذي تريد الإبلاغ عنه كمنتحل وسيقوم فريق SDSF بالتحقيق فيه.",from:ANTI_ID,senderName:"SDSF",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()});
+    }
+  } catch {}
+  openChat(cid,data);
+}
+
+// MembersList component
+function MembersList({members,admins,ownerId,currentUserId,isAdmin,chatId,db,cache,onAction}) {
+  const [memberData,setMD] = useState({});
+  useEffect(()=>{
+    members.filter(m=>!m.startsWith("bot_")).slice(0,20).forEach(async mid=>{
+      if(memberData[mid]) return;
+      const cached=cache?.users?.find(u=>u.uid===mid);
+      if(cached){setMD(p=>({...p,[mid]:cached}));return;}
+      try{const s=await get(ref(db,`users/${mid}`));if(s.exists())setMD(p=>({...p,[mid]:s.val()}));}catch{}
+    });
+  },[members.join(",")]);
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
+      {members.filter(m=>!m.startsWith("bot_")).slice(0,20).map(mid=>{
+        const m=memberData[mid];
+        const isOwnerM=mid===ownerId;
+        const isAdminM=(admins||[]).includes(mid);
+        const isMe=mid===currentUserId;
+        return (
+          <div key={mid} style={{display:"flex",alignItems:"center",gap:"10px",padding:"8px",background:T.hov,borderRadius:"10px"}}>
+            <div style={{width:"36px",height:"36px",borderRadius:"50%",background:m?.photoURL?"transparent":rc(m?.displayName||"?"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px",fontWeight:"700",color:"#fff",overflow:"hidden",flexShrink:0}}>
+              {m?.photoURL?<img src={m.photoURL} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(m?.displayName||"؟").charAt(0).toUpperCase()}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:T.text,fontSize:"13px",fontWeight:"600",display:"flex",alignItems:"center",gap:"5px"}}>
+                {m?.displayName||"..."}
+                {isOwnerM&&<span style={{background:`${T.gold}20`,color:T.gold,fontSize:"10px",padding:"1px 5px",borderRadius:"5px"}}>مالك</span>}
+                {isAdminM&&!isOwnerM&&<span style={{background:`${T.btn}20`,color:T.btn,fontSize:"10px",padding:"1px 5px",borderRadius:"5px"}}>مشرف</span>}
+              </div>
+              <div style={{color:T.dim,fontSize:"11px"}}>@{m?.username||"—"}</div>
+            </div>
+            {isAdmin&&!isMe&&!isOwnerM&&(
+              <div style={{display:"flex",gap:"4px"}}>
+                {!isAdminM&&<button onClick={()=>onAction("promote",mid)} style={{background:`${T.gold}15`,border:"none",borderRadius:"6px",padding:"4px 8px",color:T.gold,cursor:"pointer",fontFamily:"inherit",fontSize:"11px"}}>رفع</button>}
+                <button onClick={()=>onAction("kick",mid)} style={{background:`${T.err}10`,border:"none",borderRadius:"6px",padding:"4px 8px",color:T.err,cursor:"pointer",fontFamily:"inherit",fontSize:"11px"}}>طرد</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // Auth screen
 function AuthScreen() {
   const [mode,setMode]=useState("login");
@@ -413,6 +555,17 @@ function AuthScreen() {
       const sc=`support_${id}`;
       await set(ref(db,`chats/${sc}`),{id:sc,type:"support",name:"الدعم الفني",isOfficial:true,members:[id,SUP_ID],createdAt:Date.now()});
       await set(ref(db,`userChats/${id}/${sc}`),{chatId:sc,lastMessage:"",lastTime:"",unread:0,order:Date.now(),type:"support",name:"الدعم الفني",color:"#4CAF50"});
+      // App channel subscription for all users
+      try {
+        const appChSnap=await get(ref(db,`chats/${APP_CH}`));
+        if(appChSnap.exists()){
+          const appChData=appChSnap.val();
+          const subs=[...(appChData.subscribersList||[])];
+          if(!subs.includes(id)) subs.push(id);
+          await update(ref(db,`chats/${APP_CH}`),{subscribers:subs.length,subscribersList:subs});
+          await set(ref(db,`userChats/${id}/${APP_CH}`),{chatId:APP_CH,lastMessage:"مرحباً بك في تيرمين",lastTime:"",unread:0,order:Date.now()-5,type:"channel",name:"تيرمين الرسمية",verified:true,color:"#5288c1"});
+        }
+      } catch {}
     } catch(e){
       const m={"auth/email-already-in-use":"البريد مستخدم بالفعل","auth/invalid-email":"بريد غير صالح","auth/weak-password":"كلمة المرور ضعيفة"};
       setErr(m[e.code]||e.message);
@@ -540,6 +693,19 @@ export default function App() {
             setEp({dn:d.displayName||"",un:d.username||"",bio:d.bio||"",photo:d.photoURL||""});
             setIO(d.username===OWNER);
             setPrivSettings({showPhone:d.showPhone||false,showLastSeen:d.showLastSeen!==false,showOnline:d.showOnline!==false});
+            // Auto-create app channel + special bots if owner
+            if(d.username===OWNER){
+              // App channel
+              get(ref(db,`chats/${APP_CH}`)).then(s=>{
+                if(!s.exists()){
+                  set(ref(db,`chats/${APP_CH}`),{id:APP_CH,type:"channel",name:"تيرمين الرسمية",username:"termeen",bio:"القناة الرسمية لتطبيق تيرمين ✈️",verified:true,isOfficial:true,ownerId:"system",subscribers:55000000,subscribersList:[],members:["system"],createdAt:Date.now(),photoURL:""});
+                  set(ref(db,"chatUsernames/termeen"),APP_CH);
+                }
+              }).catch(()=>{});
+              // Ensure owner has app channel in sidebar
+              const appChEntry={chatId:APP_CH,lastMessage:"القناة الرسمية",lastTime:"",unread:0,order:Date.now()-10,type:"channel",name:"تيرمين الرسمية",verified:true,color:"#5288c1"};
+              get(ref(db,`userChats/${u.uid}/${APP_CH}`)).then(s=>{if(!s.exists())set(ref(db,`userChats/${u.uid}/${APP_CH}`),appChEntry);}).catch(()=>{});
+            }
             // Update presence
             const presRef=ref(db,`presence/${u.uid}`);
             set(presRef,{online:true,lastSeen:Date.now()});
@@ -603,6 +769,14 @@ export default function App() {
     return()=>off(r);
   },[user]);
 
+  // Live chat metadata listener
+  useEffect(()=>{
+    if(!actId) return;
+    const liveRef=ref(db,`chats/${actId}`);
+    const liveUnsub=onValue(liveRef,snap=>{if(snap.exists())setAD(snap.val());});
+    return()=>off(liveRef);
+  },[actId]);
+
   // Load messages
   useEffect(()=>{
     if(msgUnsubRef.current){msgUnsubRef.current();msgUnsubRef.current=null;}
@@ -651,15 +825,20 @@ export default function App() {
 
   // ── Open chat IMMEDIATELY with data ──
   const openChat=useCallback((cid,data)=>{
-    // Set data IMMEDIATELY - no async waiting
     setActId(cid);
-    if(data) setAD(data);  // ← set immediately from passed data
+    if(data) setAD(data);  // immediate display
     setReply(null);setEd(null);setInp("");
     setSM(false);setAM(false);setCtx(null);setQM(false);setQ("");setModal(null);
     if(mobile) setSSB(false);
     setTab("chats");
-    // Then refresh data in background
-    get(ref(db,`chats/${cid}`)).then(s=>{if(s.exists())setAD(s.val());}).catch(()=>{});
+    // Refresh from DB (gets latest subscriber count etc)
+    get(ref(db,`chats/${cid}`)).then(s=>{
+      if(s.exists()){
+        setAD(s.val());
+        // Also update local chats list with fresh data
+        setChats(prev=>prev.map(c=>(c.id||c.chatId)===cid?{...c,...s.val(),id:cid}:c));
+      }
+    }).catch(()=>{});
     if(user) update(ref(db,`userChats/${user.uid}/${cid}`),{unread:0}).catch(()=>{});
     setTimeout(()=>inpRef.current?.focus(),80);
   },[mobile,user]);
@@ -681,10 +860,11 @@ export default function App() {
     const text=editing?inp.trim():(ot??inp.trim());
     if(!text&&!extra.imageUrl&&!extra.fileName) return;
     if(!actId||!user) return;
-    // Use ud or fallback to user object
+    // Use ud or fallback to user object  
     const senderName=ud?.displayName||user.displayName||"مستخدم";
     const senderUsername=ud?.username||"";
-    if(actData?.type==="channel"&&actData?.ownerId!==user.uid) return;
+    // Only block channel posting if not owner (but allow if actData not loaded yet)
+    if(actData?.type==="channel"&&actData?.ownerId&&actData.ownerId!==user.uid) return;
     if(editing){
       await update(ref(db,`messages/${actId}/${editing.id}`),{text,edited:true}).catch(()=>{});
       setEd(null);setInp("");inpRef.current?.focus();return;
@@ -693,23 +873,34 @@ export default function App() {
     const msg={id:mid,chatId:actId,text:text||"",from:user.uid,senderName,senderUsername,senderPhoto:ud?.photoURL||"",senderColor:ud?.color||rc(senderName),time:now(),type,createdAt:Date.now(),replyTo:reply?{text:reply.text,sender:reply.senderName||"أنا",msgId:reply.id}:null,...extra};
     await set(ref(db,`messages/${actId}/${mid}`),msg).catch(()=>{});
     const prev=type==="image"?"📷 صورة":type==="file"?`📎 ${msg.fileName}`:text;
-    // If PM first message - add to both users' sidebar NOW
-    if(actData?.type==="private"){
-      const myEntry={chatId:actId,lastMessage:prev,lastTime:now(),unread:0,order:Date.now(),type:"private",name:actData.name,color:actData.color,photoURL:actData.photoURL||"",members:actData.members};
-      await set(ref(db,`userChats/${user.uid}/${actId}`),myEntry).catch(()=>{});
-    } else {
-      await update(ref(db,`userChats/${user.uid}/${actId}`),{lastMessage:prev,lastTime:now(),order:Date.now()}).catch(()=>{});
+    // Get chat data fresh from DB to avoid stale actData
+    let chatInfo = actData;
+    if(!chatInfo) {
+      try { const cs=await get(ref(db,`chats/${actId}`)); if(cs.exists()) chatInfo=cs.val(); } catch {}
     }
+    
+    // Always update my sidebar
+    await update(ref(db,`userChats/${user.uid}/${actId}`),{lastMessage:prev,lastTime:now(),order:Date.now()}).catch(()=>{});
+    
+    // If first time in PM - ensure both sides have sidebar entry
+    if(chatInfo?.type==="private"||actId.startsWith("pm_")){
+      const mc=await get(ref(db,`userChats/${user.uid}/${actId}`)).catch(()=>null);
+      if(!mc?.exists()||!mc.val().type){
+        const myEntry={chatId:actId,lastMessage:prev,lastTime:now(),unread:0,order:Date.now(),type:"private",name:chatInfo?.name||"مستخدم",color:chatInfo?.color||rc(chatInfo?.name||""),photoURL:chatInfo?.photoURL||"",members:chatInfo?.members||[user.uid]};
+        await set(ref(db,`userChats/${user.uid}/${actId}`),myEntry).catch(()=>{});
+      }
+    }
+    
     // Notify members
-    if(actData?.members){
-      for(const m2 of actData.members){
+    if(chatInfo?.members){
+      for(const m2 of chatInfo.members){
         if(m2!==user.uid&&!m2.startsWith("bot_")&&m2!==SUP_ID&&m2!==BOT_ID){
           try {
-            const otherEntry={chatId:actId,lastMessage:prev,lastTime:now(),unread:1,order:Date.now(),type:"private",name:ud?.displayName||"مستخدم",color:ud?.color||rc(ud?.displayName||""),photoURL:ud?.photoURL||"",members:actData.members};
             const mc=await get(ref(db,`userChats/${m2}/${actId}`));
-            if(!mc.exists()&&actData?.type==="private"){
+            if(!mc.exists()){
+              const otherEntry={chatId:actId,lastMessage:prev,lastTime:now(),unread:1,order:Date.now(),type:chatInfo.type||"private",name:ud?.displayName||"مستخدم",color:ud?.color||rc(ud?.displayName||""),photoURL:ud?.photoURL||"",members:chatInfo.members};
               await set(ref(db,`userChats/${m2}/${actId}`),otherEntry);
-            } else if(mc.exists()){
+            } else {
               const uc=mc.val().unread||0;
               await update(ref(db,`userChats/${m2}/${actId}`),{lastMessage:prev,lastTime:now(),unread:uc+1,order:Date.now()});
             }
@@ -735,6 +926,10 @@ export default function App() {
       },1200);
     }
     if(actData?.type==="official_bot"&&actData?.username==="botfather") bfMsg(text,actId);
+    // SSPT - phone change bot
+    if(actData?.type==="official_bot"&&actData?.username==="sspt") handleSSPT(text,actId,user,ud,db).catch(()=>{});
+    // SDSF - anti-impersonation
+    if(actData?.type==="official_bot"&&actData?.username==="sdsf") handleSDSF(text,actId,user,ud,db).catch(()=>{});
     setInp("");setReply(null);setEd(null);setSE(false);
     inpRef.current?.focus();
   },[inp,actId,user,ud,reply,actData,editing]);
@@ -1116,6 +1311,10 @@ export default function App() {
                 )},
                 {title:"المجلدات",items:[{ic:"fol",l:"إنشاء مجلد جديد",a:()=>setModal("newFolder")}]},
                 {title:"شحن النجوم",items:[{ic:"gift",l:"شحن النجوم ⭐",d:`رصيدك: ${ud?.stars||0} نجمة`,a:()=>setModal("buyStars")}]},
+                {title:"خدمات",items:[
+                  {ic:"ph",l:"تغيير رقم الهاتف (SSPT)",a:()=>{if(user)openSSPT(user,openChat,db);setTab("chats");}},
+                  {ic:"pv",l:"الإبلاغ عن منتحل (SDSF)",a:()=>{if(user)openSDSF(user,openChat,db);setTab("chats");}},
+                ]},
                 {title:"الأمان والدعم",items:[
                   {ic:"lk",l:"الأمان والحماية",a:()=>setModal("security")},
                   {ic:"lk",l:"قفل التطبيق",d:lockPin?"مفعّل 🔒":"معطّل",a:()=>setModal("appLock")},
@@ -1295,6 +1494,7 @@ export default function App() {
                         {msg.type==="file"&&<a href={msg.fileData} download={msg.fileName} style={{display:"flex",alignItems:"center",gap:"10px",textDecoration:"none",background:"rgba(255,255,255,0.07)",borderRadius:"10px",padding:"10px 12px",marginBottom:"4px"}}><Ic n="file" s={26} c={T.btn}/><div><div style={{color:T.text,fontSize:"13px",fontWeight:"600",wordBreak:"break-all"}}>{msg.fileName}</div><div style={{color:T.dim,fontSize:"11px"}}>{fsz(msg.fileSize)}</div></div></a>}
                         {(msg.type==="text"||!msg.type)&&<MText text={msg.text} onMention={onMention} style={{color:T.text,fontSize:"14.5px",lineHeight:"1.55",wordBreak:"break-word",whiteSpace:"pre-wrap",display:"block"}}/>}
                         <div style={{display:"flex",justifyContent:"flex-start",alignItems:"center",gap:"4px",marginTop:"3px"}}>
+                          {isCh&&msg.views&&<span style={{color:T.dim,fontSize:"10px",display:"flex",alignItems:"center",gap:"2px"}}>👁{msg.views}</span>}
                           <span style={{color:T.dim,fontSize:"10.5px"}}>{msg.time}{msg.edited&&" (معدّل)"}</span>
                           {isMe&&<Ic n="chk2" s={13} c={T.btn}/>}
                           {msg.pinned&&<Ic n="pin" s={11} c={T.gold}/>}
@@ -1595,6 +1795,75 @@ export default function App() {
         </Mdl>
       )}
 
+
+      {/* ─── Channel/Group Admin Panel ─── */}
+      {modal==="channelAdmin"&&(
+        <Mdl title={`إدارة ${isCh?"القناة":"المجموعة"}`} onClose={()=>setModal(null)} w="460px">
+          <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+            {/* Settings - only for owner/admin */}
+            {isAdmin&&(
+              <div style={{background:T.inp2,borderRadius:"14px",padding:"14px"}}>
+                <div style={{color:T.dim,fontSize:"12px",fontWeight:"700",marginBottom:"10px"}}>⚙️ إعدادات</div>
+                <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                  <button onClick={()=>{setCS({...actData});setModal("chSet");}} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px",background:"none",border:"none",color:T.text,cursor:"pointer",fontFamily:"inherit",fontSize:"14px",textAlign:"right",borderRadius:"10px"}} onMouseEnter={e=>e.currentTarget.style.background=T.hov} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                    <Ic n="set" s={18} c={T.btn}/>تعديل إعدادات {isCh?"القناة":"المجموعة"}
+                  </button>
+                  {isCh&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px",borderRadius:"10px",background:T.hov}}>
+                    <span style={{color:T.text,fontSize:"14px"}}>تفعيل التعليقات</span>
+                    <Tog on={actData?.commentsEnabled||false} go={async()=>{await update(ref(db,`chats/${actId}`),{commentsEnabled:!actData?.commentsEnabled});const s=await get(ref(db,`chats/${actId}`));if(s.exists())setAD(s.val());}}/>
+                  </div>}
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px",borderRadius:"10px",background:T.hov}}>
+                    <span style={{color:T.text,fontSize:"14px"}}>تفعيل الهدايا</span>
+                    <Tog on={actData?.giftsEnabled!==false} go={async()=>{await update(ref(db,`chats/${actId}`),{giftsEnabled:actData?.giftsEnabled===false});const s=await get(ref(db,`chats/${actId}`));if(s.exists())setAD(s.val());}}/>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Members list */}
+            <div style={{background:T.inp2,borderRadius:"14px",padding:"14px"}}>
+              <div style={{color:T.dim,fontSize:"12px",fontWeight:"700",marginBottom:"10px"}}>👥 الأعضاء ({(actData?.members||[]).length})</div>
+              <div style={{maxHeight:"200px",overflowY:"auto",display:"flex",flexDirection:"column",gap:"6px"}}>
+                {(actData?.members||[]).filter(m=>!m.startsWith("bot_")&&m!==SUP_ID).slice(0,20).map(async(memberId,i)=>{
+                  return null; // rendered via component below
+                })}
+                <MembersList members={actData?.members||[]} admins={actData?.admins||[]} ownerId={actData?.ownerId} currentUserId={user?.uid} isAdmin={isAdmin} chatId={actId} db={db} cache={cache} onAction={async(action,mid)=>{
+                  if(action==="promote"){
+                    const newAdmins=[...(actData?.admins||[])];
+                    if(!newAdmins.includes(mid)) newAdmins.push(mid);
+                    await update(ref(db,`chats/${actId}`),{admins:newAdmins});
+                    alert("✅ تم رفع العضو مشرفاً");
+                  } else if(action==="kick"){
+                    const newMembers=(actData?.members||[]).filter(m=>m!==mid);
+                    await update(ref(db,`chats/${actId}`),{members:newMembers});
+                    await remove(ref(db,`userChats/${mid}/${actId}`)).catch(()=>{});
+                    alert("✅ تم طرد العضو");
+                  } else if(action==="ban"){
+                    const newMembers=(actData?.members||[]).filter(m=>m!==mid);
+                    const banned=[...(actData?.banned||[]),mid];
+                    await update(ref(db,`chats/${actId}`),{members:newMembers,banned});
+                    await remove(ref(db,`userChats/${mid}/${actId}`)).catch(()=>{});
+                    alert("✅ تم حظر العضو");
+                  }
+                  const s=await get(ref(db,`chats/${actId}`));if(s.exists())setAD(s.val());
+                }}/>
+              </div>
+            </div>
+            {!isMine&&(
+              <button onClick={async()=>{
+                if(!window.confirm(`مغادرة ${isCh?"القناة":"المجموعة"}؟`)) return;
+                const newMembers=(actData?.members||[]).filter(m=>m!==user?.uid);
+                await update(ref(db,`chats/${actId}`),{members:newMembers});
+                await remove(ref(db,`userChats/${user?.uid}/${actId}`)).catch(()=>{});
+                setActId(null);setAD(null);setModal(null);
+                if(mobile) setSSB(true);
+              }} style={{padding:"12px",background:`${T.err}12`,border:`1px solid ${T.err}25`,borderRadius:"12px",color:T.err,cursor:"pointer",fontFamily:"inherit",fontSize:"14px",fontWeight:"700"}}>
+                🚪 مغادرة {isCh?"القناة":"المجموعة"}
+              </button>
+            )}
+          </div>
+        </Mdl>
+      )}
+
       {/* ─── Buy Stars Modal ─── */}
       {modal==="buyStars"&&(
         <Mdl title="⭐ شحن النجوم" onClose={()=>setModal(null)} w="460px">
@@ -1678,4 +1947,3 @@ export default function App() {
     </div>
   );
 }
-
