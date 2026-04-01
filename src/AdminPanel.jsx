@@ -675,6 +675,108 @@ function ImpostersManager({db}) {
   );
 }
 
+
+// ── Platform Manager ──
+function PlatformManager({db}) {
+  const [listings,setListings]=useState([]);
+  const [users,setUsers]=useState([]);
+  const [selUser,setSelUser]=useState(null);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    const lr=ref(db,"marketListings");
+    const unsub=onValue(lr,snap=>{if(snap.exists())setListings(Object.values(snap.val()));else setListings([]);setLoading(false);});
+    // Also load platform users
+    get(ref(db,"users")).then(s=>{if(s.exists())setUsers(Object.values(s.val()));}).catch(()=>{});
+    return()=>off(lr);
+  },[db]);
+
+  const verifyPlatformUser=async(uid2)=>{
+    await update(ref(db,"users/"+uid2),{verified:true});
+    setUsers(p=>p.map(u=>u.uid===uid2?{...u,verified:true}:u));
+    alert("✅ تم توثيق المستخدم");
+  };
+
+  const removeListing=async(id)=>{
+    if(!window.confirm("إزالة هذا الإعلان؟")) return;
+    await update(ref(db,"marketListings/"+id),{status:"removed"});
+    alert("✅ تم إزالة الإعلان");
+  };
+
+  if(loading) return <div style={{color:"#6b8ca4",textAlign:"center",padding:"40px"}}>⟳ جاري التحميل...</div>;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+      {/* Stats */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"8px"}}>
+        {[{l:"إجمالي الإعلانات",v:listings.length},{l:"الإعلانات النشطة",v:listings.filter(l=>l.status==="active").length},{l:"المبيعات",v:listings.filter(l=>l.status==="sold").length}].map(s=>(
+          <div key={s.l} style={{background:"rgba(10,22,40,0.95)",borderRadius:"12px",padding:"14px",textAlign:"center",border:"1px solid rgba(255,215,0,0.08)"}}>
+            <div style={{color:"#ffd700",fontSize:"20px",fontWeight:"900"}}>{s.v}</div>
+            <div style={{color:"#6b8ca4",fontSize:"11px"}}>{s.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Active Listings */}
+      <div style={{background:"rgba(10,22,40,0.95)",borderRadius:"16px",padding:"16px",border:"1px solid rgba(255,215,0,0.08)"}}>
+        <div style={{color:"#ffd700",fontSize:"14px",fontWeight:"800",marginBottom:"12px"}}>📋 الإعلانات ({listings.filter(l=>l.status==="active").length} نشط)</div>
+        <div style={{display:"flex",flexDirection:"column",gap:"8px",maxHeight:"300px",overflowY:"auto"}}>
+          {listings.filter(l=>l.status==="active").map(l=>(
+            <div key={l.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px",background:"rgba(255,255,255,0.04)",borderRadius:"10px"}}>
+              <div>
+                <div style={{color:"#e8f4fd",fontSize:"13px",fontWeight:"600"}}>{l.type==="username"?"@"+l.username:l.type==="gift"?l.giftEmoji+" هدية":l.starsCount+"⭐"}</div>
+                <div style={{color:"#6b8ca4",fontSize:"11px"}}>@{l.sellerUsername||"—"} · ⭐ {l.price}</div>
+              </div>
+              <button onClick={()=>removeListing(l.id)} style={{background:"rgba(224,92,92,0.15)",border:"1px solid rgba(224,92,92,0.3)",borderRadius:"8px",padding:"5px 10px",color:"#e05c5c",cursor:"pointer",fontFamily:"inherit",fontSize:"12px",fontWeight:"700"}}>إزالة</button>
+            </div>
+          ))}
+          {!listings.filter(l=>l.status==="active").length&&<div style={{color:"#6b8ca4",textAlign:"center",padding:"20px"}}>لا توجد إعلانات نشطة</div>}
+        </div>
+      </div>
+
+      {/* Users */}
+      <div style={{background:"rgba(10,22,40,0.95)",borderRadius:"16px",padding:"16px",border:"1px solid rgba(255,215,0,0.08)"}}>
+        <div style={{color:"#ffd700",fontSize:"14px",fontWeight:"800",marginBottom:"12px"}}>👥 المستخدمون ({users.length})</div>
+        <div style={{display:"flex",flexDirection:"column",gap:"8px",maxHeight:"300px",overflowY:"auto"}}>
+          {users.slice(0,30).map(u=>(
+            <div key={u.uid} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px",background:"rgba(255,255,255,0.04)",borderRadius:"10px",cursor:"pointer"}} onClick={()=>setSelUser(selUser?.uid===u.uid?null:u)}>
+              <div style={{width:"36px",height:"36px",borderRadius:"50%",background:u.photoURL?"transparent":"#5288c1",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:"700",overflow:"hidden",flexShrink:0}}>
+                {u.photoURL?<img src={u.photoURL} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(u.displayName||"؟").charAt(0)}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{color:"#e8f4fd",fontSize:"13px",fontWeight:"600"}}>{u.displayName||"—"}{u.verified&&<span style={{background:"rgba(82,136,193,0.2)",color:"#5288c1",fontSize:"10px",padding:"1px 5px",borderRadius:"5px",marginRight:"4px"}}>موثق</span>}</div>
+                <div style={{color:"#6b8ca4",fontSize:"11px"}}>@{u.username||"—"} · ⭐{u.stars||0}</div>
+              </div>
+              {!u.verified&&<button onClick={e=>{e.stopPropagation();verifyPlatformUser(u.uid);}} style={{background:"rgba(255,215,0,0.15)",border:"1px solid rgba(255,215,0,0.3)",borderRadius:"8px",padding:"5px 10px",color:"#ffd700",cursor:"pointer",fontFamily:"inherit",fontSize:"12px",fontWeight:"700"}}>توثيق</button>}
+            </div>
+          ))}
+          {/* Expanded user details */}
+          {selUser&&(
+            <div style={{background:"rgba(82,136,193,0.08)",borderRadius:"12px",padding:"14px",border:"1px solid rgba(82,136,193,0.2)"}}>
+              <div style={{color:"#e8f4fd",fontWeight:"700",marginBottom:"10px"}}>📋 تفاصيل @{selUser.username}</div>
+              {[{l:"البريد",v:selUser.email||"—"},{l:"الهاتف",v:selUser.phone||"—"},{l:"النجوم",v:selUser.stars||0},{l:"تاريخ الإنشاء",v:selUser.createdAt?new Date(selUser.createdAt).toLocaleDateString("ar-SA"):"—"}].map(r=>(
+                <div key={r.l} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
+                  <span style={{color:"#6b8ca4",fontSize:"12px"}}>{r.l}</span>
+                  <span style={{color:"#e8f4fd",fontSize:"12px"}}>{String(r.v)}</span>
+                </div>
+              ))}
+              <div style={{marginTop:"10px"}}>
+                <div style={{color:"#6b8ca4",fontSize:"12px",marginBottom:"6px"}}>إعلاناته على المنصة:</div>
+                {listings.filter(l=>l.sellerId===selUser.uid).map(l=>(
+                  <div key={l.id} style={{color:"#e8f4fd",fontSize:"12px",padding:"4px 0"}}>
+                    {l.type==="username"?"@"+l.username:l.type==="gift"?l.giftEmoji+" هدية":l.starsCount+"⭐"} — {l.status==="active"?"🟢 نشط":l.status==="sold"?"✅ مباع":"❌ مُزال"}
+                  </div>
+                ))}
+                {!listings.filter(l=>l.sellerId===selUser.uid).length&&<div style={{color:"#6b8ca4",fontSize:"12px"}}>لا توجد إعلانات</div>}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Stars Manager ──
 function StarsManager({db}) {
   const [orders,setOrders]=useState([]);
@@ -1036,6 +1138,7 @@ export default function AdminPanel() {
     {k:"phones",l:"📞 الأرقام",c:null},
     {k:"accounts",l:"👤 حسابات التطبيق",c:null},
     {k:"imposters",l:"🛡 المنتحلون",c:null},
+    {k:"platform",l:"🌐 المنصة",c:null},
   ];
 
   return (
@@ -1248,6 +1351,14 @@ export default function AdminPanel() {
           )}
 
 
+
+          {/* PLATFORM */}
+          {tab==="platform"&&(
+            <div>
+              <div style={{color:T.gold,fontSize:"17px",fontWeight:"800",marginBottom:"16px"}}>🌐 إدارة المنصة</div>
+              <PlatformManager db={db}/>
+            </div>
+          )}
           {/* BOOST */}
           {tab==="boost"&&(
             <div>
