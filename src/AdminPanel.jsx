@@ -542,6 +542,142 @@ function BotsManager({db}) {
 
 
 
+
+// ── App Accounts Manager ──
+function AppAccountsManager({db}) {
+  const BOT_ACCOUNTS = [
+    {id:"bot_dfgfd_official",name:"DFGFD",icon:"✈️",desc:"حساب التطبيق الرئيسي"},
+    {id:"support_official",name:"الدعم الفني",icon:"🆘",desc:"حساب الدعم"},
+    {id:"bot_sspt_official",name:"SSPT",icon:"📞",desc:"تغيير الأرقام"},
+    {id:"stars_charge_bot",name:"شحن النجوم",icon:"⭐",desc:"شحن النجوم"},
+    {id:"bot_sdsf_official",name:"SDSF",icon:"🛡",desc:"مكافحة الانتحال"},
+    {id:"bot_botfather_official",name:"BotFather",icon:"🤖",desc:"إنشاء البوتات"},
+  ];
+  const [accounts,setAccounts]=useState({});
+  const [editing,setEditing]=useState(null);
+  const [newPhoto,setNewPhoto]=useState("");
+  const [newBio,setNewBio]=useState("");
+  const [newPhone,setNewPhone]=useState("");
+  const [loading,setLoading]=useState(false);
+
+  useEffect(()=>{
+    BOT_ACCOUNTS.forEach(async acc=>{
+      try{const s=await get(ref(db,"chats/"+acc.id));if(s.exists())setAccounts(p=>({...p,[acc.id]:s.val()}));}catch{}
+    });
+  },[db]);
+
+  const saveAccount=async()=>{
+    if(!editing) return;
+    setLoading(true);
+    const updates={};
+    if(newPhoto) updates.photoURL=newPhoto;
+    if(newBio) updates.bio=newBio;
+    if(newPhone) updates.phone=newPhone;
+    await update(ref(db,"chats/"+editing.id),updates).catch(()=>{});
+    const s=await get(ref(db,"chats/"+editing.id));
+    if(s.exists()) setAccounts(p=>({...p,[editing.id]:s.val()}));
+    setEditing(null);setNewPhoto("");setNewBio("");setNewPhone("");
+    setLoading(false);alert("✅ تم حفظ التغييرات");
+  };
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
+      {BOT_ACCOUNTS.map(acc=>{
+        const data=accounts[acc.id];
+        return (
+          <div key={acc.id} style={{background:"rgba(10,22,40,0.95)",borderRadius:"16px",padding:"16px",border:"1px solid rgba(255,215,0,0.08)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"12px",marginBottom:"12px"}}>
+              <div style={{width:"52px",height:"52px",borderRadius:"50%",background:data?.photoURL?"transparent":"rgba(82,136,193,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"26px",overflow:"hidden",flexShrink:0}}>
+                {data?.photoURL?<img src={data.photoURL} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}}/>:<span>{acc.icon}</span>}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{color:"#e8f4fd",fontWeight:"700",fontSize:"15px"}}>{acc.name}</div>
+                <div style={{color:"#6b8ca4",fontSize:"12px"}}>{acc.desc}</div>
+                {data?.phone&&<div style={{color:"#6b8ca4",fontSize:"11px",direction:"ltr",textAlign:"right"}}>{data.phone}</div>}
+              </div>
+              <button onClick={()=>{setEditing(acc);setNewPhoto(data?.photoURL||"");setNewBio(data?.bio||"");setNewPhone(data?.phone||"");}} style={{background:"rgba(255,215,0,0.12)",border:"1px solid rgba(255,215,0,0.25)",borderRadius:"8px",padding:"6px 12px",color:"#ffd700",cursor:"pointer",fontFamily:"inherit",fontSize:"12px",fontWeight:"700"}}>تعديل</button>
+            </div>
+            {editing?.id===acc.id&&(
+              <div style={{display:"flex",flexDirection:"column",gap:"10px",borderTop:"1px solid rgba(255,215,0,0.08)",paddingTop:"12px"}}>
+                <div>
+                  <div style={{color:"rgba(255,215,0,0.5)",fontSize:"11px",marginBottom:"6px"}}>الصورة</div>
+                  <div style={{display:"flex",gap:"8px",alignItems:"center"}}>
+                    <button onClick={()=>{const i=document.createElement("input");i.type="file";i.accept="image/*";i.onchange=e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=ev=>setNewPhoto(ev.target.result);r.readAsDataURL(f);}};i.click();}} style={{padding:"8px 14px",background:"rgba(255,215,0,0.12)",border:"1px solid rgba(255,215,0,0.3)",borderRadius:"8px",color:"#ffd700",cursor:"pointer",fontFamily:"inherit",fontSize:"12px",fontWeight:"700"}}>📷 رفع من الهاتف</button>
+                    {newPhoto&&<img src={newPhoto} alt="" style={{width:"36px",height:"36px",borderRadius:"50%",objectFit:"cover"}}/>}
+                  </div>
+                </div>
+                <input value={newBio} onChange={e=>setNewBio(e.target.value)} placeholder="النبذة..." style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:"10px",padding:"9px 12px",color:"#fff",fontSize:"13px",outline:"none",direction:"rtl",fontFamily:"inherit",boxSizing:"border-box"}}/>
+                <input value={newPhone} onChange={e=>setNewPhone(e.target.value)} placeholder="رقم الهاتف +666..." style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:"10px",padding:"9px 12px",color:"#fff",fontSize:"13px",outline:"none",direction:"ltr",fontFamily:"inherit",boxSizing:"border-box"}}/>
+                <div style={{display:"flex",gap:"8px"}}>
+                  <button onClick={saveAccount} disabled={loading} style={{flex:1,padding:"10px",background:"linear-gradient(135deg,#ffd700,#ff8c00)",border:"none",borderRadius:"10px",color:"#000",cursor:"pointer",fontFamily:"inherit",fontWeight:"700"}}>💾 حفظ</button>
+                  <button onClick={()=>setEditing(null)} style={{padding:"10px 14px",background:"rgba(255,255,255,0.06)",border:"none",borderRadius:"10px",color:"#fff",cursor:"pointer",fontFamily:"inherit"}}>إلغاء</button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Imposters Manager ──
+function ImpostersManager({db}) {
+  const [reports,setReports]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [replyText,setReplyText]=useState({});
+
+  useEffect(()=>{
+    const r=ref(db,"imposterReports");
+    const unsub=onValue(r,snap=>{
+      if(snap.exists()) setReports(Object.values(snap.val()).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)));
+      else setReports([]);
+      setLoading(false);
+    });
+    return()=>off(r);
+  },[db]);
+
+  const reply2=async(rId,userId)=>{
+    const txt=replyText[rId];
+    if(!txt?.trim()) return;
+    // Send reply to user's bot chat
+    const botId="bot_"+userId;const nid=uidGen();
+    await set(ref(db,"messages/"+botId+"/"+nid),{id:nid,chatId:botId,text:"🛡 رد فريق SDSF:
+
+"+txt.trim()+"
+
+🔢 رقم البلاغ: "+rId,from:"bot_dfgfd_official",senderName:"SDSF",time:new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"}),type:"text",isOfficialBot:true,createdAt:Date.now()}).catch(()=>{});
+    await update(ref(db,"imposterReports/"+rId),{status:"replied",reply:txt});
+    setReplyText(p=>{const n={...p};delete n[rId];return n;});
+    alert("✅ تم إرسال الرد");
+  };
+
+  if(loading) return <div style={{color:"#6b8ca4",textAlign:"center",padding:"40px"}}>⟳ جاري التحميل...</div>;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+      {reports.length===0&&<div style={{color:"#6b8ca4",textAlign:"center",padding:"50px"}}>لا توجد بلاغات انتحال</div>}
+      {reports.map(r=>(
+        <div key={r.id} style={{background:"rgba(10,22,40,0.95)",borderRadius:"14px",padding:"14px",border:"1px solid rgba(255,215,0,0.08)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"8px"}}>
+            <div>
+              <div style={{color:"#e8f4fd",fontWeight:"700",fontSize:"14px"}}>🛡 بلاغ انتحال</div>
+              <div style={{color:"#6b8ca4",fontSize:"12px"}}>من: @{r.reporterUsername||"—"}</div>
+              <div style={{color:"#6b8ca4",fontSize:"12px"}}>الحساب المبلَّغ عنه: {r.targetInfo||"—"}</div>
+            </div>
+            <span style={{background:r.status==="replied"?"rgba(77,214,122,0.15)":"rgba(240,160,64,0.15)",color:r.status==="replied"?"#4dd67a":"#f0a040",fontSize:"11px",padding:"3px 10px",borderRadius:"8px"}}>{r.status==="replied"?"✅ تم الرد":"⏳ معلق"}</span>
+          </div>
+          {r.details&&<div style={{background:"rgba(255,255,255,0.04)",borderRadius:"8px",padding:"8px 10px",color:"#6b8ca4",fontSize:"13px",marginBottom:"10px"}}>{r.details}</div>}
+          <div style={{display:"flex",gap:"8px"}}>
+            <input value={replyText[r.id]||""} onChange={e=>setReplyText(p=>({...p,[r.id]:e.target.value}))} placeholder="اكتب رداً للمستخدم..." style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:"8px",padding:"8px 12px",color:"#fff",fontSize:"13px",outline:"none",direction:"rtl",fontFamily:"inherit"}}/>
+            <button onClick={()=>reply2(r.id,r.reporterId)} style={{background:"rgba(77,214,122,0.2)",border:"1px solid rgba(77,214,122,0.4)",borderRadius:"8px",padding:"6px 14px",color:"#4dd67a",cursor:"pointer",fontFamily:"inherit",fontSize:"13px",fontWeight:"700"}}>إرسال</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Stars Manager ──
 function StarsManager({db}) {
   const [orders,setOrders]=useState([]);
@@ -905,6 +1041,8 @@ export default function AdminPanel() {
     {k:"reports",l:"🚩 البلاغات",c:null},
     {k:"stars",l:"⭐ الشحن",c:null},
     {k:"phones",l:"📞 الأرقام",c:null},
+    {k:"accounts",l:"👤 حسابات التطبيق",c:null},
+    {k:"imposters",l:"🛡 المنتحلون",c:null},
   ];
 
   return (
@@ -1133,6 +1271,21 @@ export default function AdminPanel() {
             </div>
           )}
 
+
+          {/* APP ACCOUNTS */}
+          {tab==="accounts"&&(
+            <div>
+              <div style={{color:T.gold,fontSize:"17px",fontWeight:"800",marginBottom:"16px"}}>👤 حسابات التطبيق</div>
+              <AppAccountsManager db={db}/>
+            </div>
+          )}
+          {/* IMPOSTERS */}
+          {tab==="imposters"&&(
+            <div>
+              <div style={{color:T.gold,fontSize:"17px",fontWeight:"800",marginBottom:"16px"}}>🛡 بلاغات المنتحلين</div>
+              <ImpostersManager db={db}/>
+            </div>
+          )}
           {/* STARS ORDERS */}
           {tab==="stars"&&(
             <div>
@@ -1167,4 +1320,3 @@ export default function AdminPanel() {
     </div>
   );
 }
-
