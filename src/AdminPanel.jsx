@@ -642,11 +642,8 @@ function ImpostersManager({db}) {
     if(!txt?.trim()) return;
     // Send reply to user's bot chat
     const botId="bot_"+userId;const nid=uidGen();
-    await set(ref(db,"messages/"+botId+"/"+nid),{id:nid,chatId:botId,text:"🛡 رد فريق SDSF:
-
-text: txt.trim(),
-
-🔢 رقم البلاغ: "+rId,from:"bot_dfgfd_official",senderName:"SDSF",time:new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"}),type:"text",isOfficialBot:true,createdAt:Date.now()}).catch(()=>{});
+    const replyMsg="🛡 رد فريق SDSF:\n\n"+txt.trim()+"\n\n🔢 رقم البلاغ: "+rId;
+    await set(ref(db,"messages/"+botId+"/"+nid),{id:nid,chatId:botId,text:replyMsg,from:"bot_dfgfd_official",senderName:"SDSF",time:new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"}),type:"text",isOfficialBot:true,createdAt:Date.now()}).catch(()=>{});
     await update(ref(db,"imposterReports/"+rId),{status:"replied",reply:txt});
     setReplyText(p=>{const n={...p};delete n[rId];return n;});
     alert("✅ تم إرسال الرد");
@@ -704,12 +701,8 @@ function StarsManager({db}) {
       await update(ref(db,"users/"+uid2),{stars:currentStars+order.stars});
       // Notify user
       const botId="bot_"+uid2; const nid=uidGen();
-      await set(ref(db,"messages/"+botId+"/"+nid),{id:nid,chatId:botId,text:`✅ تم شحن حسابك!
-
-⭐ ${order.stars} نجمة تم إضافتها
-🔢 رقم الطلب: ${order.orderId}
-
-شكراً لثقتك بتيرمين! 🎉`,from:"bot_dfgfd_official",senderName:"DFGFD",time:new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"}),type:"text",isOfficialBot:true,createdAt:Date.now()});
+      const starsTxt="✅ تم شحن حسابك!\n\n⭐ "+order.stars+" نجمة تم إضافتها\n🔢 رقم الطلب: "+order.orderId+"\n\nشكراً لثقتك بتيرمين! 🎉";
+    await set(ref(db,"messages/"+botId+"/"+nid),{id:nid,chatId:botId,text:starsTxt,from:"bot_dfgfd_official",senderName:"DFGFD",time:new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"}),type:"text",isOfficialBot:true,createdAt:Date.now()});
     }
     await update(ref(db,"starOrders/"+order.orderId),{status:"approved"});
     alert("✅ تم الموافقة وإضافة النجوم");
