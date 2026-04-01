@@ -460,9 +460,8 @@ async function openSDSF(user,openChat,db) {
       await set(ref(db,`chats/${cid}`),{...data,members:[user.uid,ANTI_ID],createdAt:Date.now(),photoURL:""});
       await set(ref(db,`userChats/${user.uid}/${cid}`),{chatId:cid,lastMessage:"بلاغ انتحال",lastTime:"",unread:0,order:Date.now()-1,type:"official_bot",name:"SDSF",color:"#9C27B0"});
       const wm=uid();
-      await set(ref(db,`messages/${cid}/${wm}`),{id:wm,chatId:cid,text:"مرحباً! أنا مكافح الانتحال SDSF 🛡
-
-أرسل لي معلومات الحساب الذي تريد الإبلاغ عنه كمنتحل وسيقوم فريق SDSF بالتحقيق فيه.",from:ANTI_ID,senderName:"SDSF",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()});
+      const sdsfWelcome="مرحباً! أنا مكافح الانتحال SDSF 🛡\n\nأرسل لي معلومات الحساب الذي تريد الإبلاغ عنه كمنتحل وسيقوم فريق SDSF بالتحقيق فيه.";
+  await set(ref(db,`messages/${cid}/${wm}`),{id:wm,chatId:cid,text:sdsfWelcome,from:ANTI_ID,senderName:"SDSF",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()});
     }
   } catch {}
   openChat(cid,data);
