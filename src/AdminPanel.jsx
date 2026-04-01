@@ -644,7 +644,7 @@ function ImpostersManager({db}) {
     const botId="bot_"+userId;const nid=uidGen();
     await set(ref(db,"messages/"+botId+"/"+nid),{id:nid,chatId:botId,text:"🛡 رد فريق SDSF:
 
-"+txt.trim()+"
+text: txt.trim(),
 
 🔢 رقم البلاغ: "+rId,from:"bot_dfgfd_official",senderName:"SDSF",time:new Date().toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"}),type:"text",isOfficialBot:true,createdAt:Date.now()}).catch(()=>{});
     await update(ref(db,"imposterReports/"+rId),{status:"replied",reply:txt});
