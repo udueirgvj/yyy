@@ -1492,6 +1492,24 @@ export default function App() {
                       <div style={{padding:"8px 11px 5px",borderRadius:isMe?"16px 16px 16px 4px":"16px 16px 4px 16px",background:isMe?T.out:(isB||isSP)?"#1a3040":T.inp,boxShadow:"0 1px 3px rgba(0,0,0,0.3)"}}>
                         {showSender&&<div style={{color:msg.senderColor||T.btn,fontSize:"12px",fontWeight:"700",marginBottom:"3px",cursor:"pointer"}} onClick={()=>{const u2=cache.users.find(u=>u.uid===msg.from);if(u2)setProf(u2);}}>{msg.senderName}</div>}
                         {(isB||isSP)&&!isMe&&<div style={{color:T.gold,fontSize:"11px",fontWeight:"700",marginBottom:"3px",display:"flex",alignItems:"center",gap:"4px"}}><Vbg sz={13}/>⭐ {msg.senderName}</div>}
+                        {msg.hasConfirm&&msg.confirmId&&(
+                          <div style={{display:"flex",gap:"8px",marginTop:"8px"}}>
+                            <button onClick={async()=>{
+                              await update(ref(db,`platformConfirm/${msg.confirmId}`),{status:"approved"}).catch(()=>{});
+                              const nid=uid();
+                              await set(ref(db,`messages/${actId}/${nid}`),{id:nid,chatId:actId,text:"✅ تم قبول تسجيل الدخول في منصة سوق تيرمين",from:BOT_ID,senderName:"DFGFD",time:now(),type:"text",isOfficialBot:true,createdAt:Date.now()});
+                            }} style={{flex:1,padding:"8px",background:"rgba(77,214,122,0.2)",border:"1px solid rgba(77,214,122,0.4)",borderRadius:"10px",color:"#4dd67a",cursor:"pointer",fontFamily:"inherit",fontSize:"13px",fontWeight:"700"}}>
+                              ✅ قبول تسجيل الدخول
+                            </button>
+                            <button onClick={async()=>{
+                              await update(ref(db,`platformConfirm/${msg.confirmId}`),{status:"rejected"}).catch(()=>{});
+                              const nid=uid();
+                              await set(ref(db,`messages/${actId}/${nid}`),{id:nid,chatId:actId,text:"❌ تم رفض تسجيل الدخول في منصة سوق تيرمين",from:BOT_ID,senderName:"DFGFD",time:now(),type:"text",isOfficialBot:true,createdAt:Date.now()});
+                            }} style={{flex:1,padding:"8px",background:"rgba(224,92,92,0.15)",border:"1px solid rgba(224,92,92,0.3)",borderRadius:"10px",color:"#e05c5c",cursor:"pointer",fontFamily:"inherit",fontSize:"13px",fontWeight:"700"}}>
+                              ❌ رفض
+                            </button>
+                          </div>
+                        )}
                         {msg.replyTo&&<div style={{background:"rgba(255,255,255,0.07)",borderRadius:"8px",padding:"5px 10px",marginBottom:"6px",borderRight:`3px solid ${T.btn}`}}><div style={{color:T.btn,fontSize:"11px",fontWeight:"700"}}>{msg.replyTo.sender}</div><div style={{color:T.dim,fontSize:"12px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"200px"}}>{msg.replyTo.text}</div></div>}
                         {msg.type==="gift"&&<div style={{textAlign:"center",padding:"10px"}}><div style={{fontSize:"48px"}}>{msg.gift?.emoji}</div><div style={{color:T.gold,fontSize:"13px",fontWeight:"700",marginTop:"6px"}}>🎁 هدية {msg.gift?.name}</div><div style={{color:T.dim,fontSize:"11px"}}>⭐ {msg.gift?.stars} نجمة</div>{msg.text&&<div style={{color:T.text,fontSize:"13px",marginTop:"6px"}}>{msg.text}</div>}</div>}
                         {msg.type==="image"&&<div style={{marginBottom:"4px"}}><img src={msg.imageUrl} alt="" style={{maxWidth:"240px",maxHeight:"280px",borderRadius:"10px",display:"block",width:"100%",objectFit:"cover"}}/>{msg.text&&<MText text={msg.text} onMention={onMention} style={{color:T.text,fontSize:"14px",display:"block",marginTop:"5px"}}/>}</div>}
