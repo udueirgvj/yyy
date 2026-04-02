@@ -377,62 +377,42 @@ function GiftsModal({onClose,onSend,userStars=0}) {
 // SSPT phone change handler
 async function handleSSPT(text,cid,user,ud,db) {
   const t=text.trim();
-  // Check if it's a phone number (11 digits)
   const phoneRegex=/^\+?[0-9]{10,14}$/;
   if(phoneRegex.test(t.replace(/\s/g,""))){
     const phone=t.replace(/\s/g,"");
-    // Check if this is their current phone
     if(ud?.phone===phone||ud?.phone===phone.replace("+","+666").slice(0,15)){
-      // Generate new phone
       const newPhone="+666"+Math.floor(Math.random()*90000000+10000000);
       const orderId="RPH-"+Date.now().toString().slice(-6);
       await update(ref(db,`users/${user.uid}`),{phone:newPhone}).catch(()=>{});
       const rid=uid();
-      await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:`✅ عزيزي، تم تغيير رقم هاتفك!
-
-📞 الرقم القديم: ${phone}
-📞 رقمك الجديد: ${newPhone}
-
-🕐 وقت التغيير: ${new Date().toLocaleString("ar-SA")}
-🔢 رقم الطلب: ${orderId}`,from:SSPT_ID,senderName:"SSPT",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
+      const successMsg="✅ عزيزي، تم تغيير رقم هاتفك!\n\n📞 الرقم القديم: "+phone+"\n📞 رقمك الجديد: "+newPhone+"\n\n🕐 "+new Date().toLocaleString("ar-SA")+"\n🔢 رقم الطلب: "+orderId;
+      await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:successMsg,from:SSPT_ID,senderName:"SSPT",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
       await update(ref(db,`userChats/${user.uid}/${cid}`),{lastMessage:"تم تغيير الرقم",lastTime:"",order:Date.now()+1});
-      // Log to admin
       await set(ref(db,`phoneChanges/${orderId}`),{orderId,userId:user.uid,username:ud?.username,oldPhone:phone,newPhone,createdAt:Date.now()}).catch(()=>{});
     } else {
       const rid=uid();
-      await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:"⚠️ عزيزي، وجدنا خطأ في الرقم!
-
-هذا ليس رقم حسابك.
-عليك التأكد من صحة الرقم وإعادة المحاولة.
-
-⛔ تحذير: عدم إرسال أرقام عشوائية في قسم SSPT.",from:SSPT_ID,senderName:"SSPT",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
+      const errMsg="⚠️ عزيزي، وجدنا خطأ في الرقم!\n\nهذا ليس رقم حسابك.\nعليك التأكد من صحة الرقم وإعادة المحاولة.\n\n⛔ تحذير: عدم إرسال أرقام عشوائية في قسم SSPT.";
+      await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:errMsg,from:SSPT_ID,senderName:"SSPT",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
     }
-  } else if(t.toLowerCase()==="/start"||t==="بداء"||t==="بداء"){
+  } else if(t.toLowerCase()==="/start"||t==="بداء"){
     const rid=uid();
-    await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:"مرحباً بك عزيزي 👋
-
-نحن سعداء بتواصلك معنا.
-
-أرسلي رقمك المكون من 11 رقم وسيتم مراجعته خلال دقائق ويتم استبدال الرقم برقم جديد.
-
-📞 أو اكتب: شراء رقم مميز",from:SSPT_ID,senderName:"SSPT",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
+    const welcomeMsg="مرحباً بك عزيزي 👋\n\nنحن سعداء بتواصلك معنا.\n\nأرسل لي رقمك المكون من 11 رقم وسيتم مراجعته خلال دقائق ويتم استبدال الرقم برقم جديد.\n\n📞 أو اكتب: شراء رقم مميز";
+    await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:welcomeMsg,from:SSPT_ID,senderName:"SSPT",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
     await update(ref(db,`userChats/${user.uid}/${cid}`),{lastMessage:"مرحباً بك",lastTime:"",order:Date.now()+1});
   }
 }
+
 
 // SDSF anti-impersonation handler
 async function handleSDSF(text,cid,user,ud,db) {
   const rid=uid();
   const orderId="IMP-"+Date.now().toString().slice(-6);
-  // Save report
   await set(ref(db,`imposterReports/${orderId}`),{id:orderId,reporterId:user.uid,reporterUsername:ud?.username,targetInfo:text,details:text,status:"pending",createdAt:Date.now()}).catch(()=>{});
-  await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:`✅ تم استلام بلاغك.
-
-سيراجع فريق SDSF حالة الطلب ويتم الرد عليك.
-
-🔢 رقم التذكرة: ${orderId}`,from:ANTI_ID,senderName:"SDSF",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
+  const replyMsg="✅ تم استلام بلاغك.\n\nسيراجع فريق SDSF حالة الطلب ويتم الرد عليك.\n\n🔢 رقم التذكرة: "+orderId;
+  await set(ref(db,`messages/${cid}/${rid}`),{id:rid,chatId:cid,text:replyMsg,from:ANTI_ID,senderName:"SDSF",time:"",type:"text",isOfficialBot:true,createdAt:Date.now()+500});
   await update(ref(db,`userChats/${user.uid}/${cid}`),{lastMessage:"تم استلام البلاغ",lastTime:"",order:Date.now()+1});
 }
+
 
 // SSPT bot chat creation
 async function openSSPT(user,openChat,db) {
@@ -2053,3 +2033,4 @@ export default function App() {
     </div>
   );
 }
+
