@@ -1,0 +1,7 @@
+{
+  "appId": "com.termeen.app",
+  "appName": "Termeen",
+  "webDir": "build",
+  "bundledWebRuntime": false
+}
+
